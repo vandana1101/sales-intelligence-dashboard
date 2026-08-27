@@ -790,10 +790,12 @@ function ChartViewportSlider({
   const maxStart = Math.max(0, data.length - visibleCount);
   const safeStart = Math.min(Math.max(0, startIndex), maxStart);
   const endIndex = data.length ? Math.min(data.length, safeStart + visibleCount) : 0;
+  const sliderMax = 1000;
+  const sliderValue = maxStart === 0 ? 0 : Math.round((safeStart / maxStart) * sliderMax);
 
   if (data.length <= visibleCount) {
     return (
-      <div className="mt-2 px-1">
+      <div className="mt-3 px-1">
         <div className="flex items-center justify-between text-[11px] text-slate-400">
           <span>Showing all {data.length} periods</span>
         </div>
@@ -802,21 +804,26 @@ function ChartViewportSlider({
   }
 
   return (
-    <div className="mt-2 px-1">
+    <div className="mt-3 px-1 select-none">
       <input
         type="range"
         min={0}
-        max={maxStart}
+        max={sliderMax}
         step={1}
-        value={safeStart}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full h-2 accent-indigo-600 cursor-pointer"
-        aria-label="Scroll chart data"
+        value={sliderValue}
+        onChange={(event) => {
+          const position = Number(event.target.value) / sliderMax;
+          onChange(Math.round(position * maxStart));
+        }}
+        className="w-full h-1.5 accent-indigo-600 cursor-grab active:cursor-grabbing"
+        aria-label="Move chart window across all periods"
       />
-      <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-        <span>{data[safeStart]?.name || ""}</span>
-        <span>Showing {safeStart + 1}–{endIndex} of {data.length}</span>
-        <span>{data[endIndex - 1]?.name || ""}</span>
+      <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+        <span>{data[0]?.name || ""}</span>
+        <span className="font-medium text-slate-500">
+          {data[safeStart]?.name || ""} – {data[endIndex - 1]?.name || ""}
+        </span>
+        <span>{data[data.length - 1]?.name || ""}</span>
       </div>
     </div>
   );
@@ -931,6 +938,7 @@ function Opportunities({
   const [monthlyStart, setMonthlyStart] = useState(0);
   const [weeklyStart, setWeeklyStart] = useState(0);
   const [regionalStart, setRegionalStart] = useState(0);
+  const [outcomeMonthlyStart, setOutcomeMonthlyStart] = useState(0);
 
   /* =======================================================
      FILTER OPTIONS
@@ -1322,6 +1330,11 @@ function Opportunities({
   const visibleRegionData = useMemo(
     () => sliceChartWindow(regionData, regionalStart, 4),
     [regionData, regionalStart]
+  );
+
+  const visibleOutcomeMonthlyData = useMemo(
+    () => sliceChartWindow(monthlyData, outcomeMonthlyStart, 6),
+    [monthlyData, outcomeMonthlyStart]
   );
 
   /* =======================================================
@@ -2098,7 +2111,7 @@ function Opportunities({
             height="100%"
           >
             <BarChart
-              data={monthlyData}
+              data={visibleOutcomeMonthlyData}
               margin={{
                 top: 52,
                 right: 20,
@@ -2194,6 +2207,14 @@ function Opportunities({
           </ResponsiveContainer>
 
         </div>
+
+
+        <ChartViewportSlider
+          data={monthlyData}
+          startIndex={outcomeMonthlyStart}
+          onChange={setOutcomeMonthlyStart}
+          visibleCount={6}
+        />
       </ChartCard>
 
       {/* ===================================================
@@ -2878,7 +2899,7 @@ function Opportunities({
                   return (
                     <div
                       key={row["Opportunity ID"] || index}
-                      className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 items-center px-4 py-3 border-b border-slate-100 hover:bg-slate-50"
+                      className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 items-center px-4 py-3 rounded-xl bg-rose-50 border border-rose-100 min-h-[54px]"
                     >
                       <div className="min-w-0">
                         <p className="font-semibold text-sm text-slate-800 truncate">
