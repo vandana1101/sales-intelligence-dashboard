@@ -1,5 +1,3 @@
-// Updated Opportunities dashboard
-
 import { useMemo, useState } from "react";
 
 import {
