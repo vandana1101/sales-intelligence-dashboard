@@ -256,7 +256,20 @@ function getOutcome(row) {
 }
 
 function getStage(row) {
-  return text(row["Opportunity Stage"]) || "Unknown";
+  const rawStage = text(row["Opportunity Stage"]);
+  if (!rawStage) return "Unknown";
+
+  // Canonical presentation labels used everywhere in the dashboard.
+  // IMPORTANT: getOutcome() intentionally reads the raw Opportunity Stage
+  // so these display/grouping changes never alter the Outcome Bucket logic.
+  const normalized = rawStage.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (normalized === "negotiation") return "Negotiation";
+  if (normalized === "solution design" || normalized === "proposal wip") return "Solutions design";
+  if (normalized === "rfq receipt") return "Proposal Received";
+  if (normalized === "rfq submission") return "Proposal submission";
+
+  return rawStage;
 }
 
 function getOwner(row) {
@@ -2021,51 +2034,113 @@ function Opportunities({
       )}
 
       {/* ===================================================
-          OPPORTUNITY STAGE SUMMARY
+          TOP STAGE TABLES
       =================================================== */}
 
-      <ChartCard
-        title="Opportunity Stage Summary"
-        subtitle="Opportunity value and count by stage"
-      >
-        {(() => {
-          const valueExtremes = getColumnExtremes(stageData, (item) => item.value);
-          const countExtremes = getColumnExtremes(stageData, (item) => item.opportunities);
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
 
-          return (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse border border-slate-200">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="w-[55%] text-left px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
-                    <th className="w-[22.5%] text-right px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Value (Cr.)</th>
-                    <th className="w-[22.5%] text-right px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Count</th>
+        {/* ===================================================
+            OPPORTUNITY STAGE SUMMARY
+        =================================================== */}
+
+        <ChartCard
+          title="Opportunity Stage Summary"
+          subtitle="Opportunity value and count by stage — values in Cr."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse border border-slate-200">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="w-[50%] text-left px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
+                  <th className="w-[25%] text-right px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Value</th>
+                  <th className="w-[25%] text-right px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageData.map((item) => (
+                  <tr key={item.name} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium text-slate-700 border border-slate-200">{item.name}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800 border border-slate-200">
+                      {Number(item.value) > 0 ? Number(item.value).toFixed(2) : ""}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-700 border border-slate-200">
+                      {Number(item.opportunities) > 0 ? Number(item.opportunities).toLocaleString("en-IN") : ""}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {stageData.map((item) => (
-                    <tr key={item.name} className="hover:bg-slate-50">
-                      <td className="px-5 py-3.5 font-medium text-slate-700 border border-slate-200">{item.name}</td>
-                      <td
-                        className="px-5 py-3.5 text-right font-semibold text-slate-800 border border-slate-200"
-                        style={getHeatCellStyle(item.value, valueExtremes.min, valueExtremes.max)}
-                      >
-                        {formatCrores(item.value)}
-                      </td>
-                      <td
-                        className="px-5 py-3.5 text-right font-semibold text-slate-700 border border-slate-200"
-                        style={getHeatCellStyle(item.opportunities, countExtremes.min, countExtremes.max)}
-                      >
-                        {Number(item.opportunities).toLocaleString("en-IN")}
-                      </td>
-                    </tr>
+                ))}
+                <tr className="bg-slate-50 font-bold">
+                  <td className="px-4 py-3.5 text-slate-800 border border-slate-200">Grand Total</td>
+                  <td className="px-4 py-3.5 text-right text-slate-800 border border-slate-200">
+                    {stageData.reduce((sum, item) => sum + (Number(item.value) || 0), 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right text-slate-800 border border-slate-200">
+                    {stageData.reduce((sum, item) => sum + (Number(item.opportunities) || 0), 0).toLocaleString("en-IN")}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
+
+        {/* ===================================================
+            OWNER × STAGE VALUE TABLE
+        =================================================== */}
+
+        <ChartCard
+          title="Assigned To × Opportunity Stage"
+          subtitle="Values in Cr. by assigned owner and opportunity stage"
+        >
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm min-w-[900px] border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="sticky left-0 z-10 bg-slate-50 text-left px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
+                  {ownerStageData.stages.map((stage) => (
+                    <th key={stage} className="text-right px-4 py-3.5 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })()}
-      </ChartCard>
+                  <th className="text-right px-4 py-3.5 font-bold text-slate-700 whitespace-nowrap border border-slate-200">Grand Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ownerStageData.rows.map((row) => (
+                  <tr key={row.name} className="hover:bg-slate-50">
+                    <td className="sticky left-0 z-[5] bg-white px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
+                    {ownerStageData.stages.map((stage) => {
+                      const value = Number(row[stage]) || 0;
+                      return (
+                        <td
+                          key={stage}
+                          className="px-4 py-3 text-right text-slate-700 whitespace-nowrap border border-slate-200"
+                        >
+                          {value > 0 ? value.toFixed(2) : ""}
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3 text-right font-semibold text-slate-800 whitespace-nowrap border border-slate-200">
+                      {Number(row.total) > 0 ? Number(row.total).toFixed(2) : ""}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-slate-50 font-bold">
+                  <td className="sticky left-0 z-[5] bg-slate-50 px-4 py-3.5 text-slate-800 border border-slate-200">Grand Total</td>
+                  {ownerStageData.stages.map((stage) => {
+                    const total = ownerStageData.rows.reduce((sum, row) => sum + (Number(row[stage]) || 0), 0);
+                    return (
+                      <td key={stage} className="px-4 py-3.5 text-right text-slate-800 whitespace-nowrap border border-slate-200">
+                        {total > 0 ? total.toFixed(2) : ""}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3.5 text-right text-slate-900 whitespace-nowrap border border-slate-200">
+                    {ownerStageData.rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0).toFixed(2)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
+
+      </div>
 
       {/* ===================================================
           PIPELINE BY STAGE
@@ -2094,58 +2169,6 @@ function Opportunities({
           </ResponsiveContainer>
         </div>
         <ChartRangeSlider data={stageData} startIndex={pipelineStageRange[0]} endIndex={pipelineStageRange[1]} onChange={(start, end) => setPipelineStageRange([start, end])} minVisible={1} />
-      </ChartCard>
-
-      {/* ===================================================
-          OWNER × STAGE VALUE TABLE
-      =================================================== */}
-
-      <ChartCard
-        title="Assigned To × Opportunity Stage"
-        subtitle="Value in Crores by assigned owner and opportunity stage"
-      >
-        {(() => {
-          const ownerStageValues = ownerStageData.rows.flatMap((row) =>
-            ownerStageData.stages.map((stage) => Number(row[stage]) || 0)
-          ).filter((value) => value > 0);
-          const ownerStageExtremes = ownerStageValues.length
-            ? { min: Math.min(...ownerStageValues), max: Math.max(...ownerStageValues) }
-            : { min: 0, max: 0 };
-
-          return (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-sm min-w-[900px] border-collapse">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="sticky left-0 z-10 bg-slate-50 text-left px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
-                    {ownerStageData.stages.map((stage) => (
-                      <th key={stage} className="text-right px-5 py-3.5 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ownerStageData.rows.map((row) => (
-                    <tr key={row.name} className="hover:bg-slate-50">
-                      <td className="sticky left-0 z-[5] bg-white px-5 py-3.5 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
-                      {ownerStageData.stages.map((stage) => {
-                        const value = Number(row[stage]) || 0;
-                        return (
-                          <td
-                            key={stage}
-                            className="px-5 py-3.5 text-right text-slate-700 whitespace-nowrap border border-slate-200"
-                            style={getHeatCellStyle(value, ownerStageExtremes.min, ownerStageExtremes.max)}
-                          >
-                            {formatCrores(value)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })()}
       </ChartCard>
 
       {/* ===================================================
