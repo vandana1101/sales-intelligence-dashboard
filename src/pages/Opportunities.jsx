@@ -31,6 +31,7 @@ import {
   Cell,
   Legend,
   LabelList,
+  Brush,
 } from "recharts";
 
 import KPI from "../components/dashboard/KPI";
@@ -112,22 +113,7 @@ function formatChartValue(
 ) {
   const amount = number(value);
   const symbol = getCurrencySymbol(currency);
-
-  if (display === "Raw") {
-    return `${symbol}${amount.toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`;
-  }
-
-  if (display === "Lakhs") {
-    return `${symbol}${(
-      amount / 100000
-    ).toFixed(1)}L`;
-  }
-
-  return `${symbol}${(
-    amount / 10000000
-  ).toFixed(1)}Cr`;
+  return `${symbol}${amount.toFixed(1)} Cr`;
 }
 
 /* =========================================================
@@ -135,25 +121,35 @@ function formatChartValue(
 ========================================================= */
 
 function getOpportunityValue(row) {
-  const annual = number(
-    row["Value of Contract Per Annum INR"]
+  const valueColumn = Object.keys(row || {}).find((key) =>
+    /(?:value|values).*?(?:cr|crore)/i.test(key)
   );
 
+  const croreValue = valueColumn ? number(row[valueColumn]) : 0;
+  if (croreValue > 0) return croreValue * 10000000;
+
+  const annual = number(row["Value of Contract Per Annum INR"]);
   if (annual > 0) return annual;
 
-  const monthly = number(
-    row["Revenue potential per month (in INR)"]
-  );
-
+  const monthly = number(row["Revenue potential per month (in INR)"]);
   if (monthly > 0) return monthly * 12;
 
-  const annualValueCrs = number(
-    row["Annual Value in Crs"]
+  return 0;
+}
+
+function getOpportunityValueCrores(row) {
+  const valueColumn = Object.keys(row || {}).find((key) =>
+    /(?:value|values).*?(?:cr|crore)/i.test(key)
   );
 
-  if (annualValueCrs > 0) {
-    return annualValueCrs * 10000000;
-  }
+  const croreValue = valueColumn ? number(row[valueColumn]) : 0;
+  if (croreValue > 0) return croreValue;
+
+  const annual = number(row["Value of Contract Per Annum INR"]);
+  if (annual > 0) return annual / 10000000;
+
+  const monthly = number(row["Revenue potential per month (in INR)"]);
+  if (monthly > 0) return (monthly * 12) / 10000000;
 
   return 0;
 }
@@ -213,31 +209,26 @@ function getAgeBucket(
 ========================================================= */
 
 function getOutcome(row) {
-  return (
-    text(row["Outcome bucket"]) ||
-    "Unknown"
-  );
+  const stage = text(row["Opportunity Stage"]).toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (["won", "onboarded", "1st invoice", "agreement", "loi received"].includes(stage)) {
+    return "Won";
+  }
+  if (stage === "lost") return "Lost";
+  if (stage === "hold") return "Hold";
+  return "Active/In Pipeline";
 }
 
 function getStage(row) {
-  return (
-    text(row["Opportunity Stage"]) ||
-    "Unknown"
-  );
+  return text(row["Opportunity Stage"]) || "Unknown";
 }
 
 function getOwner(row) {
-  return (
-    text(row["Assigned To"]) ||
-    "Unassigned"
-  );
+  return text(row["Assigned To"]) || "Unassigned";
 }
 
 function getIndustry(row) {
-  return (
-    text(row["Industry"]) ||
-    "Unknown"
-  );
+  return text(row["Industry"]) || "Unknown";
 }
 
 function getPCSVertical(row) {
@@ -249,30 +240,108 @@ function getPCSVertical(row) {
   );
 }
 
+function parseDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "number" && value > 20000 && value < 60000) {
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getCreatedDate(row) {
+  return parseDate(row["Opportunity Created Date"]);
+}
+
+function getISOWeekInfo(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const year = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return { year, week };
+}
+
+function getMonthInfo(row) {
+  const date = getCreatedDate(row);
+  if (!date) return { label: "Unknown", key: -1 };
+  return {
+    label: date.toLocaleString("en-US", { month: "short", year: "numeric" }),
+    key: date.getFullYear() * 100 + date.getMonth(),
+  };
+}
+
+function getWeekInfo(row) {
+  const date = getCreatedDate(row);
+  if (!date) return { label: "Unknown", key: -1 };
+  const { year, week } = getISOWeekInfo(date);
+  return { label: `Week ${week} ${year}`, key: year * 100 + week };
+}
+
+function getYearInfo(row) {
+  const date = getCreatedDate(row);
+  if (!date) return { label: "Unknown", key: -1 };
+  return { label: String(date.getFullYear()), key: date.getFullYear() };
+}
+
+function getFiscalQuarterInfo(row) {
+  const date = getCreatedDate(row);
+  if (!date) return { label: "Unknown", key: -1 };
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  const quarter = month >= 3 ? Math.floor((month - 3) / 3) + 1 : 4;
+  const fiscalYear = month >= 3 ? year : year - 1;
+  return { label: `Q${quarter} ${fiscalYear}`, key: fiscalYear * 10 + quarter };
+}
+
 function getRegion(row) {
-  return (
-    text(
-      row["Customer Service required region"]
-    ) ||
-    text(row["PCS User Region"]) ||
-    "Unknown"
-  );
+  const raw = text(row["Customer Service required region"] || row["PCS User Region"]).toLowerCase();
+  if (!raw) return "Unknown";
+
+  const normalized = raw.replace(/&/g, " and ").replace(/[,/;|]+/g, " ").replace(/[-]+/g, " ");
+  const panIndia = /\bpan\s*india\b|all\s*(india|regions)|across\s*india|india\s*wide|nationwide/.test(normalized);
+  if (panIndia) return "Pan India";
+
+  const directions = {
+    North: /\bnorth(?:ern)?\b|delhi|punjab|haryana|himachal|uttarakhand|jammu|kashmir|uttar\s*pradesh|chandigarh/,
+    South: /\bsouth(?:ern)?\b|tamil\s*nadu|kerala|karnataka|telangana|andhra|chennai|bangalore|bengaluru|hyderabad|coimbatore|kochi|madurai/,
+    East: /\beast(?:ern)?\b|west\s*bengal|odisha|orissa|bihar|jharkhand|assam|sikkim|meghalaya|tripura|manipur|nagaland|mizoram|arunachal/,
+    West: /\bwest(?:ern)?\b|gujarat|maharashtra|goa|madhya\s*pradesh|chhattisgarh|mumbai|pune|ahmedabad|surat|vadodara/,
+  };
+
+  const matched = Object.entries(directions)
+    .filter(([, regex]) => regex.test(normalized))
+    .map(([name]) => name);
+
+  if (matched.length === 0) return "Unknown";
+  if (matched.length === 4) return "Pan India";
+  if (matched.length === 1) return matched[0];
+  return "Multiple Locations";
+}
+
+function getUpdatedTime(row) {
+  return text(row["Updated Time"] || row["Updated time"] || row["updated_time"]);
+}
+
+function getLatestUpdatedTime(rows) {
+  const candidates = rows
+    .map((row) => ({ raw: getUpdatedTime(row), date: parseDate(getUpdatedTime(row)) }))
+    .filter((item) => item.raw);
+
+  if (!candidates.length) return "—";
+  const dated = candidates.filter((item) => item.date);
+  if (!dated.length) return candidates[0].raw;
+  return dated.sort((a, b) => b.date.getTime() - a.date.getTime())[0].raw;
 }
 
 function getMonth(row) {
-  return (
-    text(row["Opportunity Month (G)"]) ||
-    text(row["Opportunity Month"]) ||
-    "Unknown"
-  );
+  return getMonthInfo(row).label;
 }
 
 function getWeek(row) {
-  return (
-    text(row["Opportunity Week (G)"]) ||
-    text(row["Opportunity Week"]) ||
-    "Unknown"
-  );
+  return getWeekInfo(row).label;
 }
 
 /* =========================================================
@@ -305,7 +374,7 @@ function aggregateBy(
       };
     }
 
-    const value = getOpportunityValue(row);
+    const value = getOpportunityValueCrores(row);
     const outcome =
       getOutcome(row).toLowerCase();
 
@@ -662,6 +731,51 @@ function downloadCSV(
   URL.revokeObjectURL(url);
 }
 
+function MultiSelectFilter({ label, options, selected, onChange, open, setOpen }) {
+  const toggle = (value) => {
+    if (selected.includes(value)) onChange(selected.filter((item) => item !== value));
+    else onChange([...selected, value]);
+  };
+
+  const summary = selected.length === 0 ? `All ${label}` : `${selected.length} selected`;
+
+  return (
+    <div className="relative min-w-[150px]">
+      <button
+        type="button"
+        onClick={() => setOpen(open === label ? null : label)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600"
+      >
+        <span className="truncate">{summary}</span>
+        <span className="text-slate-400">⌄</span>
+      </button>
+
+      {open === label && (
+        <div className="absolute z-50 mt-2 w-[240px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl p-2">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50"
+          >
+            Clear selection / All
+          </button>
+          {options.map((option) => (
+            <label key={option} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => toggle(option)}
+                className="accent-indigo-600"
+              />
+              <span className="truncate">{option}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
@@ -739,203 +853,92 @@ function Opportunities({
      FILTER STATE
   ======================================================= */
 
-  const [
-    search,
-    setSearch,
-  ] = useState("");
-
-  const [
-    outcomeFilter,
-    setOutcomeFilter,
-  ] = useState("All");
-
-  const [
-    stageFilter,
-    setStageFilter,
-  ] = useState("All");
-
-  const [
-    ownerFilter,
-    setOwnerFilter,
-  ] = useState("All");
-
-  const [
-    industryFilter,
-    setIndustryFilter,
-  ] = useState("All");
-
-  const [
-    regionFilter,
-    setRegionFilter,
-  ] = useState("All");
-
-  const [
-    ageFilter,
-    setAgeFilter,
-  ] = useState("All");
+  const [search, setSearch] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState([]);
+  const [stageFilter, setStageFilter] = useState([]);
+  const [ownerFilter, setOwnerFilter] = useState([]);
+  const [industryFilter, setIndustryFilter] = useState([]);
+  const [regionFilter, setRegionFilter] = useState([]);
+  const [ageFilter, setAgeFilter] = useState([]);
+  const [weekFilter, setWeekFilter] = useState([]);
+  const [monthFilter, setMonthFilter] = useState([]);
+  const [yearFilter, setYearFilter] = useState([]);
+  const [quarterFilter, setQuarterFilter] = useState([]);
+  const [openFilter, setOpenFilter] = useState(null);
 
   /* =======================================================
      FILTER OPTIONS
   ======================================================= */
 
-  const filterOptions =
-    useMemo(() => {
-      const unique = (values) =>
-        [
-          ...new Set(
-            values
-              .map(text)
-              .filter(Boolean)
-          ),
-        ].sort();
+  const filterOptions = useMemo(() => {
+    const unique = (values) => [...new Set(values.filter(Boolean))];
+    const sortOptions = (values, type) => [...values].sort((a, b) => {
+      if (type === "week") {
+        const ma = a.match(/Week (\d+) (\d+)/);
+        const mb = b.match(/Week (\d+) (\d+)/);
+        return ma && mb ? Number(ma[2]) * 100 + Number(ma[1]) - (Number(mb[2]) * 100 + Number(mb[1])) : a.localeCompare(b);
+      }
+      if (type === "month") return new Date(`1 ${a}`).getTime() - new Date(`1 ${b}`).getTime();
+      if (type === "year") return Number(a) - Number(b);
+      if (type === "quarter") {
+        const ma = a.match(/Q(\d) (\d+)/);
+        const mb = b.match(/Q(\d) (\d+)/);
+        return ma && mb ? Number(ma[2]) * 10 + Number(ma[1]) - (Number(mb[2]) * 10 + Number(mb[1])) : a.localeCompare(b);
+      }
+      return a.localeCompare(b);
+    });
 
-      return {
-        outcomes: unique(
-          opportunities.map(
-            (row) =>
-              row["Outcome bucket"]
-          )
-        ),
-
-        stages: unique(
-          opportunities.map(
-            (row) =>
-              row["Opportunity Stage"]
-          )
-        ),
-
-        owners: unique(
-          opportunities.map(
-            (row) =>
-              row["Assigned To"]
-          )
-        ),
-
-        industries: unique(
-          opportunities.map(
-            (row) =>
-              row["Industry"]
-          )
-        ),
-
-        regions: unique(
-          opportunities.map(
-            (row) =>
-              row[
-                "Customer Service required region"
-              ] ||
-              row[
-                "PCS User Region"
-              ]
-          )
-        ),
-      };
-    }, [opportunities]);
+    return {
+      outcomes: unique(opportunities.map(getOutcome)).sort(),
+      stages: unique(opportunities.map(getStage)).sort(),
+      owners: unique(opportunities.map(getOwner)).sort(),
+      industries: unique(opportunities.map(getIndustry)).sort(),
+      regions: unique(opportunities.map(getRegion)).sort(),
+      ages: [`<${ageWarning} days`, `${ageWarning}–${ageCritical} days`, `>${ageCritical} days`],
+      weeks: sortOptions(unique(opportunities.map((row) => getWeekInfo(row).label)), "week"),
+      months: sortOptions(unique(opportunities.map((row) => getMonthInfo(row).label)), "month"),
+      years: sortOptions(unique(opportunities.map((row) => getYearInfo(row).label)), "year"),
+      quarters: sortOptions(unique(opportunities.map((row) => getFiscalQuarterInfo(row).label)), "quarter"),
+    };
+  }, [opportunities, ageWarning, ageCritical]);
 
   /* =======================================================
      FILTERED DATA
   ======================================================= */
 
-  const filteredOpportunities =
-    useMemo(() => {
-      const query =
-        search
-          .toLowerCase()
-          .trim();
+  const filteredOpportunities = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    const matchesAny = (selected, value) => selected.length === 0 || selected.includes(value);
 
-      return opportunities.filter(
-        (row) => {
-          const opportunityName =
-            text(
-              row[
-                "Opportunity Name"
-              ]
-            );
+    return opportunities.filter((row) => {
+      const opportunityName = text(row["Opportunity Name"]);
+      const customer = text(row["Customer name"]);
+      const opportunityId = text(row["Opportunity ID"]);
 
-          const customer =
-            text(
-              row["Customer name"]
-            );
+      const matchesSearch = !query ||
+        opportunityName.toLowerCase().includes(query) ||
+        customer.toLowerCase().includes(query) ||
+        opportunityId.toLowerCase().includes(query);
 
-          const opportunityId =
-            text(
-              row["Opportunity ID"]
-            );
-
-          const matchesSearch =
-            !query ||
-            opportunityName
-              .toLowerCase()
-              .includes(query) ||
-            customer
-              .toLowerCase()
-              .includes(query) ||
-            opportunityId
-              .toLowerCase()
-              .includes(query);
-
-          const matchesOutcome =
-            outcomeFilter ===
-              "All" ||
-            getOutcome(row) ===
-              outcomeFilter;
-
-          const matchesStage =
-            stageFilter ===
-              "All" ||
-            getStage(row) ===
-              stageFilter;
-
-          const matchesOwner =
-            ownerFilter ===
-              "All" ||
-            getOwner(row) ===
-              ownerFilter;
-
-          const matchesIndustry =
-            industryFilter ===
-              "All" ||
-            getIndustry(row) ===
-              industryFilter;
-
-          const matchesRegion =
-            regionFilter ===
-              "All" ||
-            getRegion(row) ===
-              regionFilter;
-
-          const matchesAge =
-            ageFilter ===
-              "All" ||
-            getAgeBucket(
-              getAge(row),
-              ageWarning,
-              ageCritical
-            ) === ageFilter;
-
-          return (
-            matchesSearch &&
-            matchesOutcome &&
-            matchesStage &&
-            matchesOwner &&
-            matchesIndustry &&
-            matchesRegion &&
-            matchesAge
-          );
-        }
+      return (
+        matchesSearch &&
+        matchesAny(outcomeFilter, getOutcome(row)) &&
+        matchesAny(stageFilter, getStage(row)) &&
+        matchesAny(ownerFilter, getOwner(row)) &&
+        matchesAny(industryFilter, getIndustry(row)) &&
+        matchesAny(regionFilter, getRegion(row)) &&
+        matchesAny(ageFilter, getAgeBucket(getAge(row), ageWarning, ageCritical)) &&
+        matchesAny(weekFilter, getWeekInfo(row).label) &&
+        matchesAny(monthFilter, getMonthInfo(row).label) &&
+        matchesAny(yearFilter, getYearInfo(row).label) &&
+        matchesAny(quarterFilter, getFiscalQuarterInfo(row).label)
       );
-    }, [
-      opportunities,
-      search,
-      outcomeFilter,
-      stageFilter,
-      ownerFilter,
-      industryFilter,
-      regionFilter,
-      ageFilter,
-      ageWarning,
-      ageCritical,
-    ]);
+    });
+  }, [
+    opportunities, search, outcomeFilter, stageFilter, ownerFilter, industryFilter,
+    regionFilter, ageFilter, weekFilter, monthFilter, yearFilter, quarterFilter,
+    ageWarning, ageCritical,
+  ]);
 
   /* =======================================================
      KPI METRICS
@@ -1159,51 +1162,43 @@ function Opportunities({
      MONTHLY DATA
   ======================================================= */
 
-  const monthlyData =
-    useMemo(() => {
-      const data =
-        aggregateBy(
-          filteredOpportunities,
-          getMonth
-        );
-
-      return sortByValue(data);
-    }, [filteredOpportunities]);
+  const monthlyData = useMemo(() => {
+    const map = {};
+    filteredOpportunities.forEach((row) => {
+      const info = getMonthInfo(row);
+      if (!map[info.label]) map[info.label] = { name: info.label, sortKey: info.key, opportunities: 0, value: 0, wonValue: 0, activeValue: 0, lostValue: 0, holdValue: 0 };
+      const value = getOpportunityValueCrores(row);
+      map[info.label].opportunities += 1;
+      map[info.label].value += value;
+      const outcome = getOutcome(row);
+      if (outcome === "Won") map[info.label].wonValue += value;
+      else if (outcome === "Lost") map[info.label].lostValue += value;
+      else if (outcome === "Hold") map[info.label].holdValue += value;
+      else map[info.label].activeValue += value;
+    });
+    return Object.values(map).sort((a, b) => a.sortKey - b.sortKey);
+  }, [filteredOpportunities]);
 
   /* =======================================================
      WEEKLY DATA
   ======================================================= */
 
-  const weeklyData =
-    useMemo(() => {
-      const data =
-        aggregateBy(
-          filteredOpportunities,
-          getWeek
-        );
-
-      return data
-        .sort((a, b) =>
-          a.name.localeCompare(
-            b.name
-          )
-        )
-        .slice(-16);
-    }, [filteredOpportunities]);
+  const weeklyData = useMemo(() => {
+    const map = {};
+    filteredOpportunities.forEach((row) => {
+      const info = getWeekInfo(row);
+      if (!map[info.label]) map[info.label] = { name: info.label, sortKey: info.key, opportunities: 0, value: 0 };
+      map[info.label].opportunities += 1;
+      map[info.label].value += getOpportunityValueCrores(row);
+    });
+    return Object.values(map).sort((a, b) => a.sortKey - b.sortKey);
+  }, [filteredOpportunities]);
 
   /* =======================================================
      STAGE DATA
   ======================================================= */
 
-  const stageData =
-    useMemo(() => {
-      return sortByValue(
-        aggregateBy(
-          filteredOpportunities,
-          getStage
-        )
-      ).slice(0, 12);
-    }, [filteredOpportunities]);
+  const stageData = useMemo(() => sortByValue(aggregateBy(filteredOpportunities, getStage)), [filteredOpportunities]);
 
   /* =======================================================
      OWNER DATA
@@ -1237,15 +1232,11 @@ function Opportunities({
      REGION DATA
   ======================================================= */
 
-  const regionData =
-    useMemo(() => {
-      return sortByValue(
-        aggregateBy(
-          filteredOpportunities,
-          getRegion
-        )
-      );
-    }, [filteredOpportunities]);
+  const regionData = useMemo(() => {
+    const order = { North: 0, South: 1, East: 2, West: 3, "Pan India": 4, "Multiple Locations": 5, Unknown: 6 };
+    return aggregateBy(filteredOpportunities, getRegion)
+      .sort((a, b) => (order[a.name] ?? 99) - (order[b.name] ?? 99));
+  }, [filteredOpportunities]);
 
   /* =======================================================
      AGE DATA
@@ -1276,10 +1267,7 @@ function Opportunities({
           const age =
             getAge(row);
 
-          const value =
-            getOpportunityValue(
-              row
-            );
+          const value = getOpportunityValueCrores(row);
 
           if (
             age < ageWarning
@@ -1312,70 +1300,27 @@ function Opportunities({
      VALUE BUCKET DATA
   ======================================================= */
 
-  const valueBucketData =
-    useMemo(() => {
-      const buckets = [
-        {
-          name: "<10L",
-          min: 0,
-          max: 1000000,
-          opportunities: 0,
-          value: 0,
-        },
-        {
-          name: "10L–25L",
-          min: 1000000,
-          max: 2500000,
-          opportunities: 0,
-          value: 0,
-        },
-        {
-          name: "25L–50L",
-          min: 2500000,
-          max: 5000000,
-          opportunities: 0,
-          value: 0,
-        },
-        {
-          name: "50L–1Cr",
-          min: 5000000,
-          max: 10000000,
-          opportunities: 0,
-          value: 0,
-        },
-        {
-          name: ">1Cr",
-          min: 10000000,
-          max: Infinity,
-          opportunities: 0,
-          value: 0,
-        },
-      ];
+  const valueBucketData = useMemo(() => {
+    const buckets = [
+      { name: "0–1 Cr", min: 0, max: 1, opportunities: 0, value: 0 },
+      { name: "1–5 Cr", min: 1, max: 5, opportunities: 0, value: 0 },
+      { name: "5–10 Cr", min: 5, max: 10, opportunities: 0, value: 0 },
+      { name: "10–15 Cr", min: 10, max: 15, opportunities: 0, value: 0 },
+      { name: "15–20 Cr", min: 15, max: 20, opportunities: 0, value: 0 },
+      { name: ">20 Cr", min: 20, max: Infinity, opportunities: 0, value: 0 },
+    ];
 
-      filteredOpportunities.forEach(
-        (row) => {
-          const value =
-            getOpportunityValue(
-              row
-            );
+    filteredOpportunities.forEach((row) => {
+      const value = getOpportunityValueCrores(row);
+      const bucket = buckets.find((item) => value >= item.min && value < item.max);
+      if (bucket) {
+        bucket.opportunities += 1;
+        bucket.value += value;
+      }
+    });
 
-          const bucket =
-            buckets.find(
-              (item) =>
-                value >= item.min &&
-                value < item.max
-            );
-
-          if (bucket) {
-            bucket.opportunities++;
-            bucket.value +=
-              value;
-          }
-        }
-      );
-
-      return buckets;
-    }, [filteredOpportunities]);
+    return buckets;
+  }, [filteredOpportunities]);
 
   /* =======================================================
      PROCESS DURATION DATA
@@ -1446,6 +1391,7 @@ function Opportunities({
             name: field.name,
             average,
             maximum,
+            count: values.length,
           };
         }
       );
@@ -1541,22 +1487,24 @@ function Opportunities({
 
   function clearFilters() {
     setSearch("");
-    setOutcomeFilter("All");
-    setStageFilter("All");
-    setOwnerFilter("All");
-    setIndustryFilter("All");
-    setRegionFilter("All");
-    setAgeFilter("All");
+    setOutcomeFilter([]);
+    setStageFilter([]);
+    setOwnerFilter([]);
+    setIndustryFilter([]);
+    setRegionFilter([]);
+    setAgeFilter([]);
+    setWeekFilter([]);
+    setMonthFilter([]);
+    setYearFilter([]);
+    setQuarterFilter([]);
   }
 
   const hasFilters =
-    search ||
-    outcomeFilter !== "All" ||
-    stageFilter !== "All" ||
-    ownerFilter !== "All" ||
-    industryFilter !== "All" ||
-    regionFilter !== "All" ||
-    ageFilter !== "All";
+    search || outcomeFilter.length || stageFilter.length || ownerFilter.length ||
+    industryFilter.length || regionFilter.length || ageFilter.length || weekFilter.length ||
+    monthFilter.length || yearFilter.length || quarterFilter.length;
+
+  const latestUpdatedTime = useMemo(() => getLatestUpdatedTime(filteredOpportunities), [filteredOpportunities]);
 
   /* =======================================================
      EMPTY STATE
@@ -1621,196 +1569,34 @@ function Opportunities({
 
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex flex-wrap gap-3">
-
           <div className="relative flex-1 min-w-[240px]">
-
-            <Search
-              size={17}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
+            <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={search}
-              onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
-              }
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search opportunity, customer or ID..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
-
           </div>
 
-          <select
-            value={outcomeFilter}
-            onChange={(e) =>
-              setOutcomeFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600"
-          >
-            <option value="All">
-              All outcomes
-            </option>
-
-            {filterOptions.outcomes.map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {value}
-                </option>
-              )
-            )}
-          </select>
-
-          <select
-            value={stageFilter}
-            onChange={(e) =>
-              setStageFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600"
-          >
-            <option value="All">
-              All stages
-            </option>
-
-            {filterOptions.stages.map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {value}
-                </option>
-              )
-            )}
-          </select>
-
-          <select
-            value={ownerFilter}
-            onChange={(e) =>
-              setOwnerFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600 max-w-[190px]"
-          >
-            <option value="All">
-              All owners
-            </option>
-
-            {filterOptions.owners.map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {value}
-                </option>
-              )
-            )}
-          </select>
-
-          <select
-            value={industryFilter}
-            onChange={(e) =>
-              setIndustryFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600 max-w-[180px]"
-          >
-            <option value="All">
-              All industries
-            </option>
-
-            {filterOptions.industries.map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {value}
-                </option>
-              )
-            )}
-          </select>
-
-          <select
-            value={regionFilter}
-            onChange={(e) =>
-              setRegionFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600"
-          >
-            <option value="All">
-              All regions
-            </option>
-
-            {filterOptions.regions.map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
-                >
-                  {value}
-                </option>
-              )
-            )}
-          </select>
-
-          <select
-            value={ageFilter}
-            onChange={(e) =>
-              setAgeFilter(
-                e.target.value
-              )
-            }
-            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white text-slate-600"
-          >
-            <option value="All">
-              All ages
-            </option>
-
-            <option
-              value={`<${ageWarning} days`}
-            >
-              &lt;{ageWarning} days
-            </option>
-
-            <option
-              value={`${ageWarning}–${ageCritical} days`}
-            >
-              {ageWarning}–
-              {ageCritical} days
-            </option>
-
-            <option
-              value={`>${ageCritical} days`}
-            >
-              &gt;{ageCritical} days
-            </option>
-          </select>
+          <MultiSelectFilter label="outcomes" options={filterOptions.outcomes} selected={outcomeFilter} onChange={setOutcomeFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="stages" options={filterOptions.stages} selected={stageFilter} onChange={setStageFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="owners" options={filterOptions.owners} selected={ownerFilter} onChange={setOwnerFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="industries" options={filterOptions.industries} selected={industryFilter} onChange={setIndustryFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="regions" options={filterOptions.regions} selected={regionFilter} onChange={setRegionFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="ages" options={filterOptions.ages} selected={ageFilter} onChange={setAgeFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="weeks" options={filterOptions.weeks} selected={weekFilter} onChange={setWeekFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="months" options={filterOptions.months} selected={monthFilter} onChange={setMonthFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="years" options={filterOptions.years} selected={yearFilter} onChange={setYearFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="fiscal quarters" options={filterOptions.quarters} selected={quarterFilter} onChange={setQuarterFilter} open={openFilter} setOpen={setOpenFilter} />
 
           {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-rose-600 bg-rose-50 hover:bg-rose-100"
-            >
-              <X size={15} />
-              Clear
+            <button onClick={clearFilters} className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-rose-600 bg-rose-50 hover:bg-rose-100">
+              <X size={15} /> Clear
             </button>
           )}
-
         </div>
+        <p className="text-xs text-slate-400 mt-3">Select multiple values inside any filter. Selections within a filter are combined with OR; different filters are combined with AND.</p>
       </div>
 
       {/* ===================================================
@@ -1960,6 +1746,127 @@ function Opportunities({
       )}
 
       {/* ===================================================
+          WEEKLY ANALYSIS
+      =================================================== */}
+
+      <ChartCard
+        title="Weekly Opportunity Creation"
+        subtitle="Latest opportunity weeks"
+      >
+
+        <div className="h-[380px]">
+
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+
+            <BarChart
+              data={weeklyData}
+              margin={{
+                top: 52,
+                right: 20,
+                left: 10,
+                bottom: 30,
+              }}
+            >
+
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="#e2e8f0"
+              />
+
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                angle={-20}
+                textAnchor="end"
+                height={60}
+                tick={{
+                  fontSize: 10,
+                  fill: "#64748b",
+                }}
+              />
+
+              <YAxis
+                yAxisId="value"
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) =>
+                  formatChartValue(
+                    value,
+                    currency,
+                    valueDisplay
+                  )
+                }
+              />
+
+              <YAxis
+                yAxisId="count"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+              />
+
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    currency={currency}
+                    valueDisplay={valueDisplay}
+                  />
+                }
+              />
+
+              <Legend />
+
+              <Bar
+                yAxisId="value"
+                dataKey="value"
+                name="Value"
+                fill="#4f46e5"
+              >
+
+                <LabelList
+                  content={(props) => (
+                    <ValueLabel
+                      {...props}
+                      currency={currency}
+                      display={valueDisplay}
+                    />
+                  )}
+                />
+
+              </Bar>
+
+              <Bar
+                yAxisId="count"
+                dataKey="opportunities"
+                name="Opportunities"
+                fill="#22c55e"
+              >
+
+                <LabelList
+                  content={(props) => (
+                    <CountLabel
+                      {...props}
+                    />
+                  )}
+                />
+
+              </Bar>
+
+            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
+            </BarChart>
+
+          </ResponsiveContainer>
+
+        </div>
+
+      </ChartCard>
+
+      {/* ===================================================
           MONTHLY DOUBLE BAR
       =================================================== */}
 
@@ -2074,6 +1981,7 @@ function Opportunities({
                 />
               </Bar>
 
+            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
             </BarChart>
           </ResponsiveContainer>
 
@@ -2377,6 +2285,7 @@ function Opportunities({
                   />
                 </Bar>
 
+              <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
               </BarChart>
 
             </ResponsiveContainer>
@@ -2736,6 +2645,7 @@ function Opportunities({
                 />
               </Bar>
 
+            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
             </BarChart>
 
           </ResponsiveContainer>
@@ -2839,6 +2749,7 @@ function Opportunities({
           <ChartCard
             title="Aging Risk Monitor"
             subtitle={`Top opportunities above ${ageCritical} days`}
+            action={<span className="text-xs font-medium text-slate-400">Updated: {latestUpdatedTime}</span>}
             className="h-full w-full min-h-0"
           >
             <div className="h-full min-h-0 overflow-y-auto pr-1 space-y-3">
@@ -2851,7 +2762,7 @@ function Opportunities({
 
               {atRiskOpportunities.map((row, index) => {
                 const age = getAge(row);
-                const value = getOpportunityValue(row);
+                const value = getOpportunityValueCrores(row);
 
                 return (
                   <div
@@ -3063,6 +2974,17 @@ function Opportunities({
                   position: "insideLeft",
                 }}
               />
+              <YAxis
+                yAxisId="count"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: "Count",
+                  angle: 90,
+                  position: "insideRight",
+                }}
+              />
 
               <Tooltip />
 
@@ -3092,6 +3014,16 @@ function Opportunities({
               </Bar>
 
               <Bar
+                yAxisId="count"
+                dataKey="count"
+                name="Count"
+                fill="#14b8a6"
+                radius={[6, 6, 0, 0]}
+              >
+                <LabelList content={(props) => <CountLabel {...props} />} />
+              </Bar>
+
+              <Bar
                 dataKey="maximum"
                 name="Maximum Days"
                 fill="#f97316"
@@ -3108,126 +3040,6 @@ function Opportunities({
                     <DurationLabel
                       {...props}
                       decimals={0}
-                    />
-                  )}
-                />
-
-              </Bar>
-
-            </BarChart>
-
-          </ResponsiveContainer>
-
-        </div>
-
-      </ChartCard>
-
-      {/* ===================================================
-          WEEKLY ANALYSIS
-      =================================================== */}
-
-      <ChartCard
-        title="Weekly Opportunity Creation"
-        subtitle="Latest opportunity weeks"
-      >
-
-        <div className="h-[380px]">
-
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-          >
-
-            <BarChart
-              data={weeklyData}
-              margin={{
-                top: 52,
-                right: 20,
-                left: 10,
-                bottom: 30,
-              }}
-            >
-
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#e2e8f0"
-              />
-
-              <XAxis
-                dataKey="name"
-                axisLine={false}
-                tickLine={false}
-                angle={-20}
-                textAnchor="end"
-                height={60}
-                tick={{
-                  fontSize: 10,
-                  fill: "#64748b",
-                }}
-              />
-
-              <YAxis
-                yAxisId="value"
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(value) =>
-                  formatChartValue(
-                    value,
-                    currency,
-                    valueDisplay
-                  )
-                }
-              />
-
-              <YAxis
-                yAxisId="count"
-                orientation="right"
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <Tooltip
-                content={
-                  <ChartTooltip
-                    currency={currency}
-                    valueDisplay={valueDisplay}
-                  />
-                }
-              />
-
-              <Legend />
-
-              <Bar
-                yAxisId="value"
-                dataKey="value"
-                name="Value"
-                fill="#4f46e5"
-              >
-
-                <LabelList
-                  content={(props) => (
-                    <ValueLabel
-                      {...props}
-                      currency={currency}
-                      display={valueDisplay}
-                    />
-                  )}
-                />
-
-              </Bar>
-
-              <Bar
-                yAxisId="count"
-                dataKey="opportunities"
-                name="Opportunities"
-                fill="#22c55e"
-              >
-
-                <LabelList
-                  content={(props) => (
-                    <CountLabel
-                      {...props}
                     />
                   )}
                 />
