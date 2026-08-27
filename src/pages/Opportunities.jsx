@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   BriefcaseBusiness,
@@ -113,6 +113,43 @@ function formatChartValue(
   const amount = number(value);
   const symbol = getCurrencySymbol(currency);
   return `${symbol}${amount.toFixed(1)} Cr`;
+}
+
+/* =========================================================
+   CONDITIONAL TABLE FORMATTING
+   Lower values are shown with stronger red; higher values
+   progressively fade to a very light red. Zero stays neutral.
+========================================================= */
+
+function getHeatCellStyle(value, minValue, maxValue) {
+  const numeric = Number(value) || 0;
+  if (numeric <= 0 || maxValue <= minValue) {
+    return {};
+  }
+
+  const ratio = Math.max(0, Math.min(1, (numeric - minValue) / (maxValue - minValue)));
+
+  // Low = stronger red (#fca5a5), high = very light red (#fff1f2).
+  const low = [252, 165, 165];
+  const high = [255, 241, 242];
+  const rgb = low.map((channel, index) =>
+    Math.round(channel + (high[index] - channel) * ratio)
+  );
+
+  return {
+    backgroundColor: `rgb(${rgb.join(', ')})`,
+    transition: 'background-color 180ms ease',
+  };
+}
+
+function getColumnExtremes(items, accessor) {
+  const values = items
+    .map(accessor)
+    .map((value) => Number(value) || 0)
+    .filter((value) => value > 0);
+
+  if (!values.length) return { min: 0, max: 0 };
+  return { min: Math.min(...values), max: Math.max(...values) };
 }
 
 /* =========================================================
@@ -275,8 +312,18 @@ function getMonthInfo(row) {
 function getWeekInfo(row) {
   const date = getCreatedDate(row);
   if (!date) return { label: "Unknown", key: -1 };
-  const { year, week } = getISOWeekInfo(date);
-  return { label: `Week ${week} ${year}`, key: year * 100 + week };
+
+  // Week numbering is within the calendar month so filters read naturally
+  // as "Week 1 Mar 2026", "Week 2 Mar 2026", etc.
+  const weekOfMonth = Math.ceil(date.getDate() / 7);
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const year = date.getFullYear();
+  const key = year * 10000 + date.getMonth() * 10 + weekOfMonth;
+
+  return {
+    label: `Week ${weekOfMonth} ${month} ${year}`,
+    key,
+  };
 }
 
 function getYearInfo(row) {
@@ -731,6 +778,20 @@ function downloadCSV(
 }
 
 function MultiSelectFilter({ label, options, selected, onChange, open, setOpen }) {
+  useEffect(() => {
+    if (open !== label) return;
+
+    const handleOutsideClick = (event) => {
+      const target = event.target;
+      if (!target?.closest?.(`[data-filter="${label}"]`)) {
+        setOpen(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [open, label, setOpen]);
+
   const toggle = (value) => {
     if (selected.includes(value)) onChange(selected.filter((item) => item !== value));
     else onChange([...selected, value]);
@@ -739,7 +800,7 @@ function MultiSelectFilter({ label, options, selected, onChange, open, setOpen }
   const summary = selected.length === 0 ? `All ${label}` : `${selected.length} selected`;
 
   return (
-    <div className="relative min-w-[150px]">
+    <div className="relative min-w-[150px]" data-filter={label}>
       <button
         type="button"
         onClick={() => setOpen(open === label ? null : label)}
@@ -781,65 +842,150 @@ function MultiSelectFilter({ label, options, selected, onChange, open, setOpen }
    full dataset instead of shrinking the chart into a Brush.
 ========================================================= */
 
-function ChartViewportSlider({
+function ChartRangeSlider({
   data = [],
   startIndex = 0,
+  endIndex = 0,
   onChange,
-  visibleCount = 6,
+  minVisible = 1,
 }) {
-  const maxStart = Math.max(0, data.length - visibleCount);
-  const safeStart = Math.min(Math.max(0, startIndex), maxStart);
-  const endIndex = data.length ? Math.min(data.length, safeStart + visibleCount) : 0;
-  const sliderMax = 1000;
-  const sliderValue = maxStart === 0 ? 0 : Math.round((safeStart / maxStart) * sliderMax);
+  const maxIndex = Math.max(0, data.length - 1);
+  const safeStart = Math.max(0, Math.min(startIndex, maxIndex));
+  const safeEnd = Math.max(safeStart, Math.min(endIndex, maxIndex));
 
-  if (data.length <= visibleCount) {
-    return (
-      <div className="mt-3 px-1">
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>Showing all {data.length} periods</span>
-        </div>
-      </div>
-    );
-  }
+  if (data.length <= 1) return null;
+
+  const left = (safeStart / maxIndex) * 100;
+  const right = (safeEnd / maxIndex) * 100;
+  const selectedWidth = Math.max(1.5, right - left);
+
+  const setStart = (next) => {
+    const value = Math.max(0, Math.min(Number(next), safeEnd - (minVisible - 1)));
+    onChange(value, safeEnd);
+  };
+
+  const setEnd = (next) => {
+    const value = Math.min(maxIndex, Math.max(Number(next), safeStart + (minVisible - 1)));
+    onChange(safeStart, value);
+  };
 
   return (
-    <div className="mt-3 px-1 select-none">
-      <input
-        type="range"
-        min={0}
-        max={sliderMax}
-        step={1}
-        value={sliderValue}
-        onChange={(event) => {
-          const position = Number(event.target.value) / sliderMax;
-          onChange(Math.round(position * maxStart));
-        }}
-        className="w-full h-1.5 accent-indigo-600 cursor-grab active:cursor-grabbing"
-        aria-label="Move chart window across all periods"
-      />
-      <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
-        <span>{data[0]?.name || ""}</span>
-        <span className="font-medium text-slate-500">
-          {data[safeStart]?.name || ""} – {data[endIndex - 1]?.name || ""}
+    <div className="mt-4 px-1 select-none">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-medium text-slate-400">
+          {data[safeStart]?.name || ""}
         </span>
-        <span>{data[data.length - 1]?.name || ""}</span>
+        <span className="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-600">
+          {data[safeStart]?.name || ""} — {data[safeEnd]?.name || ""}
+        </span>
+        <span className="text-[11px] font-medium text-slate-400">
+          {data[safeEnd]?.name || ""}
+        </span>
       </div>
+
+      <div className="relative h-8 flex items-center">
+        <div className="absolute left-0 right-0 h-2 rounded-full bg-slate-200" />
+        <div
+          className="absolute h-2 rounded-full shadow-sm"
+          style={{
+            left: `${left}%`,
+            width: `${selectedWidth}%`,
+            background: "linear-gradient(90deg, #6366f1 0%, #14b8a6 100%)",
+          }}
+        />
+        <div className="absolute inset-x-0 flex justify-between pointer-events-none">
+          {data.map((_, index) => (
+            <span key={index} className="w-0.5 h-1 rounded-full bg-slate-300" />
+          ))}
+        </div>
+
+        <input
+          type="range"
+          min={0}
+          max={maxIndex}
+          step={1}
+          value={safeStart}
+          onChange={(event) => setStart(event.target.value)}
+          className="range-thumb-start absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none z-20"
+          aria-label="Start of chart range"
+        />
+        <input
+          type="range"
+          min={0}
+          max={maxIndex}
+          step={1}
+          value={safeEnd}
+          onChange={(event) => setEnd(event.target.value)}
+          className="range-thumb-end absolute inset-x-0 w-full appearance-none bg-transparent pointer-events-none z-30"
+          aria-label="End of chart range"
+        />
+      </div>
+
+      <style>{`
+        .range-thumb-start::-webkit-slider-thumb,
+        .range-thumb-end::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          border-radius: 9999px;
+          background: white;
+          border: 3px solid #6366f1;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.20);
+          cursor: grab;
+          pointer-events: auto;
+        }
+        .range-thumb-end::-webkit-slider-thumb {
+          border-color: #14b8a6;
+        }
+        .range-thumb-start::-moz-range-thumb,
+        .range-thumb-end::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          border-radius: 9999px;
+          background: white;
+          border: 3px solid #6366f1;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.20);
+          cursor: grab;
+          pointer-events: auto;
+        }
+        .range-thumb-end::-moz-range-thumb { border-color: #14b8a6; }
+      `}</style>
     </div>
   );
 }
 
-function sliceChartWindow(data, startIndex, visibleCount) {
+function sliceChartRange(data, startIndex, endIndex) {
   if (!Array.isArray(data)) return [];
-  if (data.length <= visibleCount) return data;
-  const maxStart = Math.max(0, data.length - visibleCount);
-  const safeStart = Math.min(Math.max(0, startIndex), maxStart);
-  return data.slice(safeStart, safeStart + visibleCount);
+  if (!data.length) return [];
+  const start = Math.max(0, Math.min(startIndex, data.length - 1));
+  const end = Math.max(start, Math.min(endIndex, data.length - 1));
+  return data.slice(start, end + 1);
 }
 
 function formatCrores(value) {
   const amount = number(value);
   return `₹${amount.toFixed(2)} Cr`;
+}
+
+/* Keep Y-axis scale stable while chart windows slide.
+   The domain is calculated from the complete dataset, not the
+   currently visible slice, so the axis never contracts/expands
+   as the slider moves. */
+function fixedChartDomain(data = [], keys = [], padding = 0.12) {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+  const maxValue = Math.max(
+    0,
+    ...data.flatMap((item) =>
+      keyList.map((key) => number(item?.[key]))
+    )
+  );
+
+  if (!Number.isFinite(maxValue) || maxValue <= 0) {
+    return [0, 1];
+  }
+
+  return [0, Math.ceil(maxValue * (1 + padding))];
 }
 
 /* =========================================================
@@ -923,6 +1069,7 @@ function Opportunities({
   const [outcomeFilter, setOutcomeFilter] = useState([]);
   const [stageFilter, setStageFilter] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState([]);
+  const [pcsVerticalFilter, setPcsVerticalFilter] = useState([]);
   const [industryFilter, setIndustryFilter] = useState([]);
   const [regionFilter, setRegionFilter] = useState([]);
   const [ageFilter, setAgeFilter] = useState([]);
@@ -934,11 +1081,11 @@ function Opportunities({
 
   // Independent fixed-width chart windows. Moving these sliders changes
   // which records are visible, while the chart itself stays the same size.
-  const [pipelineStageStart, setPipelineStageStart] = useState(0);
-  const [monthlyStart, setMonthlyStart] = useState(0);
-  const [weeklyStart, setWeeklyStart] = useState(0);
-  const [regionalStart, setRegionalStart] = useState(0);
-  const [outcomeMonthlyStart, setOutcomeMonthlyStart] = useState(0);
+  const [pipelineStageRange, setPipelineStageRange] = useState([0, 5]);
+  const [monthlyRange, setMonthlyRange] = useState([0, 5]);
+  const [weeklyRange, setWeeklyRange] = useState([0, 7]);
+  const [regionalRange, setRegionalRange] = useState([0, 3]);
+  const [outcomeMonthlyRange, setOutcomeMonthlyRange] = useState([0, 5]);
 
   /* =======================================================
      FILTER OPTIONS
@@ -948,9 +1095,13 @@ function Opportunities({
     const unique = (values) => [...new Set(values.filter(Boolean))];
     const sortOptions = (values, type) => [...values].sort((a, b) => {
       if (type === "week") {
-        const ma = a.match(/Week (\d+) (\d+)/);
-        const mb = b.match(/Week (\d+) (\d+)/);
-        return ma && mb ? Number(ma[2]) * 100 + Number(ma[1]) - (Number(mb[2]) * 100 + Number(mb[1])) : a.localeCompare(b);
+        const ma = a.match(/^Week\s+(\d+)\s+([A-Za-z]{3})\s+(\d{4})$/);
+        const mb = b.match(/^Week\s+(\d+)\s+([A-Za-z]{3})\s+(\d{4})$/);
+        const monthIndex = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+        return ma && mb
+          ? (Number(mb[3]) * 10000 + monthIndex[mb[2]] * 10 + Number(mb[1])) -
+            (Number(ma[3]) * 10000 + monthIndex[ma[2]] * 10 + Number(ma[1]))
+          : b.localeCompare(a);
       }
       if (type === "month") return new Date(`1 ${a}`).getTime() - new Date(`1 ${b}`).getTime();
       if (type === "year") return Number(a) - Number(b);
@@ -966,13 +1117,18 @@ function Opportunities({
       outcomes: unique(opportunities.map(getOutcome)).sort(),
       stages: unique(opportunities.map(getStage)).sort(),
       owners: unique(opportunities.map(getOwner)).sort(),
+      pcsVerticals: unique(opportunities.map(getPCSVertical)).sort(),
       industries: unique(opportunities.map(getIndustry)).sort(),
       regions: unique(opportunities.map(getRegion)).sort(),
       ages: [`<${ageWarning} days`, `${ageWarning}–${ageCritical} days`, `>${ageCritical} days`],
       weeks: sortOptions(unique(opportunities.map((row) => getWeekInfo(row).label)), "week"),
       months: sortOptions(unique(opportunities.map((row) => getMonthInfo(row).label)), "month"),
       years: sortOptions(unique(opportunities.map((row) => getYearInfo(row).label)), "year"),
-      quarters: sortOptions(unique(opportunities.map((row) => getFiscalQuarterInfo(row).label)), "quarter"),
+      quarters: sortOptions(
+        unique(opportunities.map((row) => getFiscalQuarterInfo(row).label))
+          .filter((value) => /^Q[1-4]\s+\d{4}$/.test(value)),
+        "quarter"
+      ),
     };
   }, [opportunities, ageWarning, ageCritical]);
 
@@ -999,6 +1155,7 @@ function Opportunities({
         matchesAny(outcomeFilter, getOutcome(row)) &&
         matchesAny(stageFilter, getStage(row)) &&
         matchesAny(ownerFilter, getOwner(row)) &&
+        matchesAny(pcsVerticalFilter, getPCSVertical(row)) &&
         matchesAny(industryFilter, getIndustry(row)) &&
         matchesAny(regionFilter, getRegion(row)) &&
         matchesAny(ageFilter, getAgeBucket(getAge(row), ageWarning, ageCritical)) &&
@@ -1009,7 +1166,7 @@ function Opportunities({
       );
     });
   }, [
-    opportunities, search, outcomeFilter, stageFilter, ownerFilter, industryFilter,
+    opportunities, search, outcomeFilter, stageFilter, ownerFilter, pcsVerticalFilter, industryFilter,
     regionFilter, ageFilter, weekFilter, monthFilter, yearFilter, quarterFilter,
     ageWarning, ageCritical,
   ]);
@@ -1274,6 +1431,25 @@ function Opportunities({
 
   const stageData = useMemo(() => sortByValue(aggregateBy(filteredOpportunities, getStage)), [filteredOpportunities]);
 
+  const ownerStageData = useMemo(() => {
+    const stages = stageData.map((item) => item.name);
+    const map = {};
+
+    filteredOpportunities.forEach((row) => {
+      const owner = getOwner(row);
+      const stage = getStage(row);
+      const value = getOpportunityValueCrores(row);
+      if (!map[owner]) map[owner] = { name: owner, total: 0 };
+      map[owner][stage] = (map[owner][stage] || 0) + value;
+      map[owner].total += value;
+    });
+
+    return {
+      stages,
+      rows: Object.values(map).sort((a, b) => b.total - a.total),
+    };
+  }, [filteredOpportunities, stageData]);
+
   /* =======================================================
      OWNER DATA
   ======================================================= */
@@ -1313,28 +1489,28 @@ function Opportunities({
   }, [filteredOpportunities]);
 
   const visibleStageData = useMemo(
-    () => sliceChartWindow(stageData, pipelineStageStart, 6),
-    [stageData, pipelineStageStart]
+    () => sliceChartRange(stageData, pipelineStageRange[0], pipelineStageRange[1]),
+    [stageData, pipelineStageRange]
   );
 
   const visibleMonthlyData = useMemo(
-    () => sliceChartWindow(monthlyData, monthlyStart, 6),
-    [monthlyData, monthlyStart]
+    () => sliceChartRange(monthlyData, monthlyRange[0], monthlyRange[1]),
+    [monthlyData, monthlyRange]
   );
 
   const visibleWeeklyData = useMemo(
-    () => sliceChartWindow(weeklyData, weeklyStart, 8),
-    [weeklyData, weeklyStart]
+    () => sliceChartRange(weeklyData, weeklyRange[0], weeklyRange[1]),
+    [weeklyData, weeklyRange]
   );
 
   const visibleRegionData = useMemo(
-    () => sliceChartWindow(regionData, regionalStart, 4),
-    [regionData, regionalStart]
+    () => sliceChartRange(regionData, regionalRange[0], regionalRange[1]),
+    [regionData, regionalRange]
   );
 
   const visibleOutcomeMonthlyData = useMemo(
-    () => sliceChartWindow(monthlyData, outcomeMonthlyStart, 6),
-    [monthlyData, outcomeMonthlyStart]
+    () => sliceChartRange(monthlyData, outcomeMonthlyRange[0], outcomeMonthlyRange[1]),
+    [monthlyData, outcomeMonthlyRange]
   );
 
   /* =======================================================
@@ -1589,6 +1765,7 @@ function Opportunities({
     setOutcomeFilter([]);
     setStageFilter([]);
     setOwnerFilter([]);
+    setPcsVerticalFilter([]);
     setIndustryFilter([]);
     setRegionFilter([]);
     setAgeFilter([]);
@@ -1599,7 +1776,7 @@ function Opportunities({
   }
 
   const hasFilters =
-    search || outcomeFilter.length || stageFilter.length || ownerFilter.length ||
+    search || outcomeFilter.length || stageFilter.length || ownerFilter.length || pcsVerticalFilter.length ||
     industryFilter.length || regionFilter.length || ageFilter.length || weekFilter.length ||
     monthFilter.length || yearFilter.length || quarterFilter.length;
 
@@ -1680,6 +1857,7 @@ function Opportunities({
           <MultiSelectFilter label="outcomes" options={filterOptions.outcomes} selected={outcomeFilter} onChange={setOutcomeFilter} open={openFilter} setOpen={setOpenFilter} />
           <MultiSelectFilter label="stages" options={filterOptions.stages} selected={stageFilter} onChange={setStageFilter} open={openFilter} setOpen={setOpenFilter} />
           <MultiSelectFilter label="owners" options={filterOptions.owners} selected={ownerFilter} onChange={setOwnerFilter} open={openFilter} setOpen={setOpenFilter} />
+          <MultiSelectFilter label="PCS Vertical" options={filterOptions.pcsVerticals} selected={pcsVerticalFilter} onChange={setPcsVerticalFilter} open={openFilter} setOpen={setOpenFilter} />
           <MultiSelectFilter label="industries" options={filterOptions.industries} selected={industryFilter} onChange={setIndustryFilter} open={openFilter} setOpen={setOpenFilter} />
           <MultiSelectFilter label="regions" options={filterOptions.regions} selected={regionFilter} onChange={setRegionFilter} open={openFilter} setOpen={setOpenFilter} />
           <MultiSelectFilter label="ages" options={filterOptions.ages} selected={ageFilter} onChange={setAgeFilter} open={openFilter} setOpen={setOpenFilter} />
@@ -1694,7 +1872,6 @@ function Opportunities({
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-400 mt-3">Select multiple values inside any filter. Selections within a filter are combined with OR; different filters are combined with AND.</p>
       </div>
 
       {/* ===================================================
@@ -1844,6 +2021,158 @@ function Opportunities({
       )}
 
       {/* ===================================================
+          OPPORTUNITY STAGE SUMMARY
+      =================================================== */}
+
+      <ChartCard
+        title="Opportunity Stage Summary"
+        subtitle="Opportunity value and count by stage"
+      >
+        {(() => {
+          const valueExtremes = getColumnExtremes(stageData, (item) => item.value);
+          const countExtremes = getColumnExtremes(stageData, (item) => item.opportunities);
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-3 font-semibold text-slate-500">Opportunity Stage</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-500">Value (Cr.)</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-500">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stageData.map((item) => (
+                    <tr key={item.name} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-700">{item.name}</td>
+                      <td
+                        className="px-4 py-3 text-right font-semibold text-slate-800 rounded-md"
+                        style={getHeatCellStyle(item.value, valueExtremes.min, valueExtremes.max)}
+                      >
+                        {formatCrores(item.value)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right font-semibold text-slate-700 rounded-md"
+                        style={getHeatCellStyle(item.opportunities, countExtremes.min, countExtremes.max)}
+                      >
+                        {Number(item.opportunities).toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </ChartCard>
+
+      {/* ===================================================
+          PIPELINE BY STAGE
+      =================================================== */}
+
+      <ChartCard
+        title="Pipeline by Stage"
+        subtitle="Opportunity count versus value"
+      >
+        <div className="h-[390px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={visibleStageData} margin={{ top: 52, right: 20, left: 10, bottom: 65 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} angle={-25} textAnchor="end" height={80} tick={{ fontSize: 10, fill: "#64748b" }} />
+              <YAxis yAxisId="value" domain={fixedChartDomain(stageData, "value")} axisLine={false} tickLine={false} tickFormatter={(value) => formatChartValue(value, currency, valueDisplay)} />
+              <YAxis yAxisId="count" domain={fixedChartDomain(stageData, "opportunities")} orientation="right" axisLine={false} tickLine={false} />
+              <Tooltip content={<ChartTooltip currency={currency} valueDisplay={valueDisplay} />} />
+              <Legend />
+              <Bar yAxisId="value" dataKey="value" name="Value" fill="#6366f1" radius={[5,5,0,0]}>
+                <LabelList content={(props) => <ValueLabel {...props} currency={currency} display={valueDisplay} />} />
+              </Bar>
+              <Bar yAxisId="count" dataKey="opportunities" name="Opportunities" fill="#06b6d4" radius={[5,5,0,0]}>
+                <LabelList content={(props) => <CountLabel {...props} />} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <ChartRangeSlider data={stageData} startIndex={pipelineStageRange[0]} endIndex={pipelineStageRange[1]} onChange={(start, end) => setPipelineStageRange([start, end])} minVisible={1} />
+      </ChartCard>
+
+      {/* ===================================================
+          OWNER × STAGE VALUE TABLE
+      =================================================== */}
+
+      <ChartCard
+        title="Assigned To × Opportunity Stage"
+        subtitle="Value in Crores by assigned owner and opportunity stage"
+      >
+        {(() => {
+          const ownerStageValues = ownerStageData.rows.flatMap((row) =>
+            ownerStageData.stages.map((stage) => Number(row[stage]) || 0)
+          ).filter((value) => value > 0);
+          const ownerStageExtremes = ownerStageValues.length
+            ? { min: Math.min(...ownerStageValues), max: Math.max(...ownerStageValues) }
+            : { min: 0, max: 0 };
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[760px]">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="sticky left-0 bg-white text-left px-4 py-3 font-semibold text-slate-500">Assigned To</th>
+                    {ownerStageData.stages.map((stage) => (
+                      <th key={stage} className="text-right px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">{stage}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ownerStageData.rows.map((row) => (
+                    <tr key={row.name} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="sticky left-0 bg-white px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">{row.name}</td>
+                      {ownerStageData.stages.map((stage) => {
+                        const value = Number(row[stage]) || 0;
+                        return (
+                          <td
+                            key={stage}
+                            className="px-4 py-3 text-right text-slate-700 whitespace-nowrap rounded-md"
+                            style={getHeatCellStyle(value, ownerStageExtremes.min, ownerStageExtremes.max)}
+                          >
+                            {formatCrores(value)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </ChartCard>
+
+      {/* ===================================================
+          OWNER × STAGE VALUE GRAPH
+      =================================================== */}
+
+      <ChartCard
+        title="Assigned To × Opportunity Stage"
+        subtitle="Stacked value in Crores by owner and stage"
+      >
+        <div style={{ height: `${Math.max(420, Math.min(900, ownerStageData.rows.length * 42 + 90))}px` }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={ownerStageData.rows} layout="vertical" margin={{ top: 10, right: 90, left: 100, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+              <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => formatChartValue(value, currency, valueDisplay)} />
+              <YAxis type="category" dataKey="name" width={110} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#475569" }} />
+              <Tooltip content={<ChartTooltip currency={currency} valueDisplay={valueDisplay} />} />
+              <Legend />
+              {ownerStageData.stages.map((stage, index) => (
+                <Bar key={stage} dataKey={stage} stackId="ownerStage" name={stage} fill={["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#8b5cf6", "#f43f5e", "#14b8a6", "#64748b"][index % 8]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </ChartCard>
+
+      {/* ===================================================
           WEEKLY ANALYSIS
       =================================================== */}
 
@@ -1890,6 +2219,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="value"
+                domain={fixedChartDomain(weeklyData, "value")}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) =>
@@ -1903,6 +2233,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="count"
+                domain={fixedChartDomain(weeklyData, "opportunities")}
                 orientation="right"
                 axisLine={false}
                 tickLine={false}
@@ -1961,11 +2292,12 @@ function Opportunities({
         </div>
 
 
-        <ChartViewportSlider
+        <ChartRangeSlider
           data={weeklyData}
-          startIndex={weeklyStart}
-          onChange={setWeeklyStart}
-          visibleCount={8}
+          startIndex={weeklyRange[0]}
+          endIndex={weeklyRange[1]}
+          onChange={(start, end) => setWeeklyRange([start, end])}
+          minVisible={1}
         />
       </ChartCard>
 
@@ -2011,6 +2343,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="value"
+                domain={fixedChartDomain(monthlyData, "value")}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) =>
@@ -2024,6 +2357,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="count"
+                domain={fixedChartDomain(monthlyData, "opportunities")}
                 orientation="right"
                 axisLine={false}
                 tickLine={false}
@@ -2088,11 +2422,12 @@ function Opportunities({
 
         </div>
 
-        <ChartViewportSlider
+        <ChartRangeSlider
           data={monthlyData}
-          startIndex={monthlyStart}
-          onChange={setMonthlyStart}
-          visibleCount={6}
+          startIndex={monthlyRange[0]}
+          endIndex={monthlyRange[1]}
+          onChange={(start, end) => setMonthlyRange([start, end])}
+          minVisible={1}
         />
       </ChartCard>
 
@@ -2137,6 +2472,7 @@ function Opportunities({
               />
 
               <YAxis
+                domain={fixedChartDomain(monthlyData, ["wonValue", "activeValue"])}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) =>
@@ -2209,17 +2545,14 @@ function Opportunities({
         </div>
 
 
-        <ChartViewportSlider
+        <ChartRangeSlider
           data={monthlyData}
-          startIndex={outcomeMonthlyStart}
-          onChange={setOutcomeMonthlyStart}
-          visibleCount={6}
+          startIndex={outcomeMonthlyRange[0]}
+          endIndex={outcomeMonthlyRange[1]}
+          onChange={(start, end) => setOutcomeMonthlyRange([start, end])}
+          minVisible={1}
         />
       </ChartCard>
-
-      {/* ===================================================
-          OUTCOME + STAGE
-      =================================================== */}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
@@ -2283,137 +2616,6 @@ function Opportunities({
 
         </ChartCard>
 
-        <ChartCard
-          title="Pipeline by Stage"
-          subtitle="Opportunity count versus value"
-          className="xl:col-span-2"
-        >
-
-          <div className="h-[370px]">
-
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-
-              <BarChart
-                data={visibleStageData}
-                margin={{
-                  top: 52,
-                  right: 20,
-                  left: 10,
-                  bottom: 65,
-                }}
-              >
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#e2e8f0"
-                />
-
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  interval={0}
-                  angle={-25}
-                  textAnchor="end"
-                  height={80}
-                  tick={{
-                    fontSize: 10,
-                    fill: "#64748b",
-                  }}
-                />
-
-                <YAxis
-                  yAxisId="value"
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(value) =>
-                    formatChartValue(
-                      value,
-                      currency,
-                      valueDisplay
-                    )
-                  }
-                />
-
-                <YAxis
-                  yAxisId="count"
-                  orientation="right"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <Tooltip
-                  content={
-                    <ChartTooltip
-                      currency={currency}
-                      valueDisplay={valueDisplay}
-                    />
-                  }
-                />
-
-                <Legend />
-
-                <Bar
-                  yAxisId="value"
-                  dataKey="value"
-                  name="Value"
-                  fill="#6366f1"
-                  radius={[
-                    5,
-                    5,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <ValueLabel
-                        {...props}
-                        currency={currency}
-                        display={valueDisplay}
-                      />
-                    )}
-                  />
-                </Bar>
-
-                <Bar
-                  yAxisId="count"
-                  dataKey="opportunities"
-                  name="Opportunities"
-                  fill="#06b6d4"
-                  radius={[
-                    5,
-                    5,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <CountLabel
-                        {...props}
-                      />
-                    )}
-                  />
-                </Bar>
-              </BarChart>
-
-            </ResponsiveContainer>
-
-          </div>
-
-          <ChartViewportSlider
-            data={stageData}
-            startIndex={pipelineStageStart}
-            onChange={setPipelineStageStart}
-            visibleCount={6}
-          />
-
-        </ChartCard>
 
       </div>
 
@@ -2705,6 +2907,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="value"
+                domain={fixedChartDomain(regionData, "value")}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value) =>
@@ -2718,6 +2921,7 @@ function Opportunities({
 
               <YAxis
                 yAxisId="count"
+                domain={fixedChartDomain(regionData, "opportunities")}
                 orientation="right"
                 axisLine={false}
                 tickLine={false}
@@ -2771,11 +2975,12 @@ function Opportunities({
 
         </div>
 
-        <ChartViewportSlider
+        <ChartRangeSlider
           data={regionData}
-          startIndex={regionalStart}
-          onChange={setRegionalStart}
-          visibleCount={4}
+          startIndex={regionalRange[0]}
+          endIndex={regionalRange[1]}
+          onChange={(start, end) => setRegionalRange([start, end])}
+          minVisible={1}
         />
       </ChartCard>
 
@@ -2876,9 +3081,9 @@ function Opportunities({
             subtitle={`Top opportunities above ${ageCritical} days`}
             className="h-full w-full min-h-0"
           >
-            <div className="h-full min-h-0 overflow-y-auto pr-1">
-              <div className="min-w-[760px]">
-                <div className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 sticky top-0 z-10">
+            <div className="h-full min-h-0 overflow-y-auto pr-1 overflow-x-hidden">
+              <div className="w-full min-w-0">
+                <div className="grid grid-cols-[minmax(0,1fr)_90px_140px_165px] gap-3 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 sticky top-0 z-10">
                   <span>Opportunity</span>
                   <span className="text-right">Age</span>
                   <span className="text-right">Value (Value in Cr.)</span>
@@ -2899,7 +3104,7 @@ function Opportunities({
                   return (
                     <div
                       key={row["Opportunity ID"] || index}
-                      className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 items-center px-4 py-3 rounded-xl bg-rose-50 border border-rose-100 min-h-[54px]"
+                      className="grid grid-cols-[minmax(0,1fr)_90px_140px_165px] gap-3 items-center px-4 py-3 rounded-xl bg-rose-50 border border-rose-100 min-h-[54px]"
                     >
                       <div className="min-w-0">
                         <p className="font-semibold text-sm text-slate-800 truncate">
@@ -2912,7 +3117,7 @@ function Opportunities({
 
                       <p className="text-right text-sm font-semibold text-rose-600">{age} days</p>
                       <p className="text-right text-sm font-semibold text-slate-700">{formatCrores(value)}</p>
-                      <p className="text-right text-sm text-slate-500 whitespace-nowrap">{updatedTime}</p>
+                      <p className="text-right text-[13px] text-slate-500 whitespace-nowrap overflow-hidden">{updatedTime}</p>
                     </div>
                   );
                 })}
