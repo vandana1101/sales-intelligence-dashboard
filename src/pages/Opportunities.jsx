@@ -2034,26 +2034,26 @@ function Opportunities({
 
           return (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm border-collapse border border-slate-200">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left px-4 py-3 font-semibold text-slate-500">Opportunity Stage</th>
-                    <th className="text-right px-4 py-3 font-semibold text-slate-500">Value (Cr.)</th>
-                    <th className="text-right px-4 py-3 font-semibold text-slate-500">Count</th>
+                  <tr className="bg-slate-50">
+                    <th className="w-[55%] text-left px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
+                    <th className="w-[22.5%] text-right px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Value (Cr.)</th>
+                    <th className="w-[22.5%] text-right px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Count</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stageData.map((item) => (
-                    <tr key={item.name} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-700">{item.name}</td>
+                    <tr key={item.name} className="hover:bg-slate-50">
+                      <td className="px-5 py-3.5 font-medium text-slate-700 border border-slate-200">{item.name}</td>
                       <td
-                        className="px-4 py-3 text-right font-semibold text-slate-800 rounded-md"
+                        className="px-5 py-3.5 text-right font-semibold text-slate-800 border border-slate-200"
                         style={getHeatCellStyle(item.value, valueExtremes.min, valueExtremes.max)}
                       >
                         {formatCrores(item.value)}
                       </td>
                       <td
-                        className="px-4 py-3 text-right font-semibold text-slate-700 rounded-md"
+                        className="px-5 py-3.5 text-right font-semibold text-slate-700 border border-slate-200"
                         style={getHeatCellStyle(item.opportunities, countExtremes.min, countExtremes.max)}
                       >
                         {Number(item.opportunities).toLocaleString("en-IN")}
@@ -2113,26 +2113,26 @@ function Opportunities({
             : { min: 0, max: 0 };
 
           return (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[760px]">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-sm min-w-[900px] border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="sticky left-0 bg-white text-left px-4 py-3 font-semibold text-slate-500">Assigned To</th>
+                  <tr className="bg-slate-50">
+                    <th className="sticky left-0 z-10 bg-slate-50 text-left px-5 py-3.5 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
                     {ownerStageData.stages.map((stage) => (
-                      <th key={stage} className="text-right px-4 py-3 font-semibold text-slate-500 whitespace-nowrap">{stage}</th>
+                      <th key={stage} className="text-right px-5 py-3.5 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {ownerStageData.rows.map((row) => (
-                    <tr key={row.name} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="sticky left-0 bg-white px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">{row.name}</td>
+                    <tr key={row.name} className="hover:bg-slate-50">
+                      <td className="sticky left-0 z-[5] bg-white px-5 py-3.5 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
                       {ownerStageData.stages.map((stage) => {
                         const value = Number(row[stage]) || 0;
                         return (
                           <td
                             key={stage}
-                            className="px-4 py-3 text-right text-slate-700 whitespace-nowrap rounded-md"
+                            className="px-5 py-3.5 text-right text-slate-700 whitespace-nowrap border border-slate-200"
                             style={getHeatCellStyle(value, ownerStageExtremes.min, ownerStageExtremes.max)}
                           >
                             {formatCrores(value)}
@@ -2554,14 +2554,14 @@ function Opportunities({
         />
       </ChartCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5">
 
         <ChartCard
           title="Opportunity Outcomes"
           subtitle="Count and distribution"
         >
 
-          <div className="h-[370px]">
+          <div className="h-[430px]">
 
             <ResponsiveContainer
               width="100%"
@@ -2576,8 +2576,8 @@ function Opportunities({
                   nameKey="name"
                   cx="50%"
                   cy="45%"
-                  innerRadius={65}
-                  outerRadius={110}
+                  innerRadius={88}
+                  outerRadius={145}
                   paddingAngle={3}
                   label={PieCountLabel}
                   labelLine={false}
@@ -2630,7 +2630,7 @@ function Opportunities({
           subtitle="Value and opportunity count by PCS Vertical"
         >
 
-          <div className="h-[680px]">
+          <div style={{ height: `${Math.max(420, Math.min(620, pcsVerticalData.length * 34 + 110))}px` }}>
 
             <ResponsiveContainer
               width="100%"
@@ -2750,7 +2750,7 @@ function Opportunities({
           subtitle="Value and opportunity count"
         >
 
-          <div className="h-[680px]">
+          <div style={{ height: `${Math.max(420, Math.min(620, ownerData.length * 34 + 110))}px` }}>
 
             <ResponsiveContainer
               width="100%"
@@ -2988,102 +2988,92 @@ function Opportunities({
           AGE ANALYSIS
       =================================================== */}
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:grid-rows-[420px_420px] items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
 
-        <div className="xl:col-span-6 xl:row-span-2 grid grid-rows-[420px_420px] gap-5 min-w-0">
-
-          <ChartCard
-            className="h-[420px] min-h-0"
-            title="Opportunity Aging"
-            subtitle={`Count and value using ${ageWarning}/${ageCritical} day thresholds`}
-          >
-
-            <div className="h-[320px] min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={ageData}
-                  margin={{ top: 52, right: 20, left: 10, bottom: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                  <YAxis
-                    yAxisId="value"
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(value) => formatChartValue(value, currency, valueDisplay)}
+        <ChartCard
+          className="min-w-0"
+          title="Opportunity Aging"
+          subtitle={`Count and value using ${ageWarning}/${ageCritical} day thresholds`}
+        >
+          <div className="h-[360px] min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={ageData}
+                margin={{ top: 52, right: 20, left: 10, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis
+                  yAxisId="value"
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => formatChartValue(value, currency, valueDisplay)}
+                />
+                <YAxis yAxisId="count" orientation="right" axisLine={false} tickLine={false} />
+                <Tooltip content={<ChartTooltip currency={currency} valueDisplay={valueDisplay} />} />
+                <Legend />
+                <Bar yAxisId="value" dataKey="value" name="Value" fill="#f59e0b" radius={[6, 6, 0, 0]}>
+                  <LabelList
+                    content={(props) => (
+                      <ValueLabel {...props} currency={currency} display={valueDisplay} />
+                    )}
                   />
-                  <YAxis yAxisId="count" orientation="right" axisLine={false} tickLine={false} />
-                  <Tooltip content={<ChartTooltip currency={currency} valueDisplay={valueDisplay} />} />
-                  <Legend />
+                </Bar>
+                <Bar yAxisId="count" dataKey="opportunities" name="Opportunities" fill="#f97316" radius={[6, 6, 0, 0]}>
+                  <LabelList content={(props) => <CountLabel {...props} />} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
 
-                  <Bar yAxisId="value" dataKey="value" name="Value" fill="#f59e0b" radius={[6, 6, 0, 0]}>
-                    <LabelList
-                      content={(props) => (
-                        <ValueLabel {...props} currency={currency} display={valueDisplay} />
-                      )}
-                    />
-                  </Bar>
+        <ChartCard
+          className="min-w-0"
+          title="Proposal Submission Performance"
+          subtitle="On-time versus delayed proposal submissions"
+        >
+          <div className="h-[300px] min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={proposalDelayData}
+                margin={{ top: 52, right: 20, left: 10, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Bar dataKey="opportunities" name="Opportunities" fill="#14b8a6" radius={[6, 6, 0, 0]}>
+                  <LabelList content={(props) => <CountLabel {...props} />} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
 
-                  <Bar yAxisId="count" dataKey="opportunities" name="Opportunities" fill="#f97316" radius={[6, 6, 0, 0]}>
-                    <LabelList content={(props) => <CountLabel {...props} />} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+              <p className="text-xs font-medium text-emerald-600">On time</p>
+              <p className="text-xl font-bold text-emerald-700 mt-0.5">
+                {proposalDelayData?.find((item) => item.name === "On Time")?.opportunities ?? 0}
+              </p>
             </div>
-
-          </ChartCard>
-
-          <ChartCard
-            className="h-[420px] min-h-0"
-            title="Proposal Submission Performance"
-            subtitle="On-time versus delayed proposal submissions"
-          >
-
-            <div className="h-[265px] min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={proposalDelayData}
-                  margin={{ top: 52, right: 20, left: 10, bottom: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="opportunities" name="Opportunities" fill="#14b8a6" radius={[6, 6, 0, 0]}>
-                    <LabelList content={(props) => <CountLabel {...props} />} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="rounded-xl bg-rose-50 border border-rose-100 px-4 py-3">
+              <p className="text-xs font-medium text-rose-600">Delayed</p>
+              <p className="text-xl font-bold text-rose-700 mt-0.5">
+                {proposalDelayData?.find((item) => item.name === "Delayed")?.opportunities ?? 0}
+              </p>
             </div>
+          </div>
+        </ChartCard>
 
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5">
-                <p className="text-xs font-medium text-emerald-600">On time</p>
-                <p className="text-xl font-bold text-emerald-700 mt-0.5">
-                  {proposalDelayData?.find((item) => item.name === "On Time")?.opportunities ?? 0}
-                </p>
-              </div>
-              <div className="rounded-xl bg-rose-50 border border-rose-100 px-4 py-2.5">
-                <p className="text-xs font-medium text-rose-600">Delayed</p>
-                <p className="text-xl font-bold text-rose-700 mt-0.5">
-                  {proposalDelayData?.find((item) => item.name === "Delayed")?.opportunities ?? 0}
-                </p>
-              </div>
-            </div>
-
-          </ChartCard>
-
-        </div>
-
-        <div className="xl:col-span-6 xl:row-span-2 min-w-0 h-full">
+        <div className="xl:col-span-2 min-w-0">
           <ChartCard
             title="Aging Risk Monitor"
             subtitle={`Top opportunities above ${ageCritical} days`}
-            className="h-full w-full min-h-0"
+            className="w-full"
           >
-            <div className="h-full min-h-0 overflow-y-auto pr-1 overflow-x-hidden">
+            <div className="max-h-[620px] overflow-y-auto pr-1">
               <div className="w-full min-w-0">
-                <div className="grid grid-cols-[minmax(0,1fr)_90px_140px_165px] gap-3 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 sticky top-0 z-10">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px_180px_190px] gap-4 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-500 sticky top-0 z-10">
                   <span>Opportunity</span>
                   <span className="text-right">Age</span>
                   <span className="text-right">Value (Value in Cr.)</span>
@@ -3096,31 +3086,32 @@ function Opportunities({
                   </div>
                 )}
 
-                {atRiskOpportunities.map((row, index) => {
-                  const age = getAge(row);
-                  const value = getOpportunityValueCrores(row);
-                  const updatedTime = getUpdatedTime(row) || "—";
+                <div className="space-y-1.5 mt-1.5">
+                  {atRiskOpportunities.map((row, index) => {
+                    const age = getAge(row);
+                    const value = getOpportunityValueCrores(row);
+                    const updatedTime = getUpdatedTime(row) || "—";
 
-                  return (
-                    <div
-                      key={row["Opportunity ID"] || index}
-                      className="grid grid-cols-[minmax(0,1fr)_90px_140px_165px] gap-3 items-center px-4 py-3 rounded-xl bg-rose-50 border border-rose-100 min-h-[54px]"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm text-slate-800 truncate">
-                          {text(row["Opportunity Name"]) || "Unnamed opportunity"}
-                        </p>
-                        <p className="text-xs text-slate-400 truncate mt-1">
-                          {text(row["Customer name"]) || "Unknown customer"}
-                        </p>
+                    return (
+                      <div
+                        key={row["Opportunity ID"] || index}
+                        className="grid grid-cols-[minmax(0,1fr)_120px_180px_190px] gap-4 items-center px-5 py-3.5 rounded-xl bg-rose-50 border border-rose-100 min-h-[58px]"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-slate-800 break-words">
+                            {text(row["Opportunity Name"]) || "Unnamed opportunity"}
+                          </p>
+                          <p className="text-xs text-slate-400 truncate mt-1">
+                            {text(row["Customer name"]) || "Unknown customer"}
+                          </p>
+                        </div>
+                        <p className="text-right text-sm font-semibold text-rose-600 whitespace-nowrap">{age} days</p>
+                        <p className="text-right text-sm font-semibold text-slate-700 whitespace-nowrap">{formatCrores(value)}</p>
+                        <p className="text-right text-[13px] text-slate-500 whitespace-nowrap">{updatedTime}</p>
                       </div>
-
-                      <p className="text-right text-sm font-semibold text-rose-600">{age} days</p>
-                      <p className="text-right text-sm font-semibold text-slate-700">{formatCrores(value)}</p>
-                      <p className="text-right text-[13px] text-slate-500 whitespace-nowrap overflow-hidden">{updatedTime}</p>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </ChartCard>
