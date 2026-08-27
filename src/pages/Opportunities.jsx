@@ -31,7 +31,6 @@ import {
   Cell,
   Legend,
   LabelList,
-  Brush,
 } from "recharts";
 
 import KPI from "../components/dashboard/KPI";
@@ -777,6 +776,66 @@ function MultiSelectFilter({ label, options, selected, onChange, open, setOpen }
 }
 
 /* =========================================================
+   FIXED-VIEW CHART SLIDER
+   Keeps the chart size fixed and moves a window across the
+   full dataset instead of shrinking the chart into a Brush.
+========================================================= */
+
+function ChartViewportSlider({
+  data = [],
+  startIndex = 0,
+  onChange,
+  visibleCount = 6,
+}) {
+  const maxStart = Math.max(0, data.length - visibleCount);
+  const safeStart = Math.min(Math.max(0, startIndex), maxStart);
+  const endIndex = data.length ? Math.min(data.length, safeStart + visibleCount) : 0;
+
+  if (data.length <= visibleCount) {
+    return (
+      <div className="mt-2 px-1">
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <span>Showing all {data.length} periods</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 px-1">
+      <input
+        type="range"
+        min={0}
+        max={maxStart}
+        step={1}
+        value={safeStart}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full h-2 accent-indigo-600 cursor-pointer"
+        aria-label="Scroll chart data"
+      />
+      <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+        <span>{data[safeStart]?.name || ""}</span>
+        <span>Showing {safeStart + 1}–{endIndex} of {data.length}</span>
+        <span>{data[endIndex - 1]?.name || ""}</span>
+      </div>
+    </div>
+  );
+}
+
+function sliceChartWindow(data, startIndex, visibleCount) {
+  if (!Array.isArray(data)) return [];
+  if (data.length <= visibleCount) return data;
+  const maxStart = Math.max(0, data.length - visibleCount);
+  const safeStart = Math.min(Math.max(0, startIndex), maxStart);
+  return data.slice(safeStart, safeStart + visibleCount);
+}
+
+function formatCrores(value) {
+  const amount = number(value);
+  return `₹${amount.toFixed(2)} Cr`;
+}
+
+/* =========================================================
    MAIN COMPONENT
 ========================================================= */
 
@@ -865,6 +924,13 @@ function Opportunities({
   const [yearFilter, setYearFilter] = useState([]);
   const [quarterFilter, setQuarterFilter] = useState([]);
   const [openFilter, setOpenFilter] = useState(null);
+
+  // Independent fixed-width chart windows. Moving these sliders changes
+  // which records are visible, while the chart itself stays the same size.
+  const [pipelineStageStart, setPipelineStageStart] = useState(0);
+  const [monthlyStart, setMonthlyStart] = useState(0);
+  const [weeklyStart, setWeeklyStart] = useState(0);
+  const [regionalStart, setRegionalStart] = useState(0);
 
   /* =======================================================
      FILTER OPTIONS
@@ -1238,6 +1304,26 @@ function Opportunities({
       .sort((a, b) => (order[a.name] ?? 99) - (order[b.name] ?? 99));
   }, [filteredOpportunities]);
 
+  const visibleStageData = useMemo(
+    () => sliceChartWindow(stageData, pipelineStageStart, 6),
+    [stageData, pipelineStageStart]
+  );
+
+  const visibleMonthlyData = useMemo(
+    () => sliceChartWindow(monthlyData, monthlyStart, 6),
+    [monthlyData, monthlyStart]
+  );
+
+  const visibleWeeklyData = useMemo(
+    () => sliceChartWindow(weeklyData, weeklyStart, 8),
+    [weeklyData, weeklyStart]
+  );
+
+  const visibleRegionData = useMemo(
+    () => sliceChartWindow(regionData, regionalStart, 4),
+    [regionData, regionalStart]
+  );
+
   /* =======================================================
      AGE DATA
   ======================================================= */
@@ -1504,7 +1590,6 @@ function Opportunities({
     industryFilter.length || regionFilter.length || ageFilter.length || weekFilter.length ||
     monthFilter.length || yearFilter.length || quarterFilter.length;
 
-  const latestUpdatedTime = useMemo(() => getLatestUpdatedTime(filteredOpportunities), [filteredOpportunities]);
 
   /* =======================================================
      EMPTY STATE
@@ -1762,7 +1847,7 @@ function Opportunities({
           >
 
             <BarChart
-              data={weeklyData}
+              data={visibleWeeklyData}
               margin={{
                 top: 52,
                 right: 20,
@@ -1856,14 +1941,19 @@ function Opportunities({
                 />
 
               </Bar>
-
-            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
             </BarChart>
 
           </ResponsiveContainer>
 
         </div>
 
+
+        <ChartViewportSlider
+          data={weeklyData}
+          startIndex={weeklyStart}
+          onChange={setWeeklyStart}
+          visibleCount={8}
+        />
       </ChartCard>
 
       {/* ===================================================
@@ -1881,7 +1971,7 @@ function Opportunities({
             height="100%"
           >
             <BarChart
-              data={monthlyData}
+              data={visibleMonthlyData}
               margin={{
                 top: 52,
                 right: 20,
@@ -1980,12 +2070,17 @@ function Opportunities({
                   )}
                 />
               </Bar>
-
-            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
             </BarChart>
           </ResponsiveContainer>
 
         </div>
+
+        <ChartViewportSlider
+          data={monthlyData}
+          startIndex={monthlyStart}
+          onChange={setMonthlyStart}
+          visibleCount={6}
+        />
       </ChartCard>
 
       {/* ===================================================
@@ -2181,7 +2276,7 @@ function Opportunities({
             >
 
               <BarChart
-                data={stageData}
+                data={visibleStageData}
                 margin={{
                   top: 52,
                   right: 20,
@@ -2284,13 +2379,18 @@ function Opportunities({
                     )}
                   />
                 </Bar>
-
-              <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
               </BarChart>
 
             </ResponsiveContainer>
 
           </div>
+
+          <ChartViewportSlider
+            data={stageData}
+            startIndex={pipelineStageStart}
+            onChange={setPipelineStageStart}
+            visibleCount={6}
+          />
 
         </ChartCard>
 
@@ -2561,7 +2661,7 @@ function Opportunities({
           >
 
             <BarChart
-              data={regionData}
+              data={visibleRegionData}
               margin={{
                 top: 52,
                 right: 20,
@@ -2644,14 +2744,18 @@ function Opportunities({
                   )}
                 />
               </Bar>
-
-            <Brush dataKey="name" height={22} travellerWidth={10} stroke="#6366f1" />
             </BarChart>
 
           </ResponsiveContainer>
 
         </div>
 
+        <ChartViewportSlider
+          data={regionData}
+          startIndex={regionalStart}
+          onChange={setRegionalStart}
+          visibleCount={4}
+        />
       </ChartCard>
 
       {/* ===================================================
@@ -2749,45 +2853,49 @@ function Opportunities({
           <ChartCard
             title="Aging Risk Monitor"
             subtitle={`Top opportunities above ${ageCritical} days`}
-            action={<span className="text-xs font-medium text-slate-400">Updated: {latestUpdatedTime}</span>}
             className="h-full w-full min-h-0"
           >
-            <div className="h-full min-h-0 overflow-y-auto pr-1 space-y-3">
-
-              {atRiskOpportunities.length === 0 && (
-                <div className="h-full min-h-[300px] flex items-center justify-center text-sm text-slate-400">
-                  No opportunities above {ageCritical} days.
+            <div className="h-full min-h-0 overflow-y-auto pr-1">
+              <div className="min-w-[760px]">
+                <div className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 sticky top-0 z-10">
+                  <span>Opportunity</span>
+                  <span className="text-right">Age</span>
+                  <span className="text-right">Value (Value in Cr.)</span>
+                  <span className="text-right">Last updated time</span>
                 </div>
-              )}
 
-              {atRiskOpportunities.map((row, index) => {
-                const age = getAge(row);
-                const value = getOpportunityValueCrores(row);
-
-                return (
-                  <div
-                    key={row["Opportunity ID"] || index}
-                    className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100 min-h-[54px]"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-base text-slate-800 truncate">
-                        {text(row["Opportunity Name"]) || "Unnamed opportunity"}
-                      </p>
-                      <p className="text-sm text-slate-500 truncate mt-1">
-                        {text(row["Customer name"]) || "Unknown customer"}
-                      </p>
-                    </div>
-
-                    <div className="text-right ml-4 shrink-0">
-                      <p className="text-base font-bold text-rose-600">{age} days</p>
-                      <p className="text-sm text-slate-500">
-                        {formatValue(value, currency, valueDisplay)}
-                      </p>
-                    </div>
+                {atRiskOpportunities.length === 0 && (
+                  <div className="min-h-[300px] flex items-center justify-center text-sm text-slate-400">
+                    No opportunities above {ageCritical} days.
                   </div>
-                );
-              })}
+                )}
 
+                {atRiskOpportunities.map((row, index) => {
+                  const age = getAge(row);
+                  const value = getOpportunityValueCrores(row);
+                  const updatedTime = getUpdatedTime(row) || "—";
+
+                  return (
+                    <div
+                      key={row["Opportunity ID"] || index}
+                      className="grid grid-cols-[minmax(300px,1fr)_100px_150px_190px] gap-4 items-center px-4 py-3 border-b border-slate-100 hover:bg-slate-50"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-slate-800 truncate">
+                          {text(row["Opportunity Name"]) || "Unnamed opportunity"}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate mt-1">
+                          {text(row["Customer name"]) || "Unknown customer"}
+                        </p>
+                      </div>
+
+                      <p className="text-right text-sm font-semibold text-rose-600">{age} days</p>
+                      <p className="text-right text-sm font-semibold text-slate-700">{formatCrores(value)}</p>
+                      <p className="text-right text-sm text-slate-500 whitespace-nowrap">{updatedTime}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </ChartCard>
         </div>
