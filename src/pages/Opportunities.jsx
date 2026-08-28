@@ -2077,11 +2077,10 @@ function Opportunities({
           TOP STAGE TABLES + REPRESENTATIVES
       =================================================== */}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 items-start">
 
-        {/* Left column: two compact tables whose combined height
-            matches the owner × stage table on the right. */}
-        <div className="grid grid-rows-[430px_270px] gap-5 h-[720px] min-h-0">
+        {/* LEFT: both tables are allowed to grow naturally so no rows are clipped */}
+        <div className="flex flex-col gap-5 min-w-0">
 
           {/* ===================================================
               OPPORTUNITY STAGE SUMMARY
@@ -2090,33 +2089,33 @@ function Opportunities({
             title="Opportunity Stage Summary"
             subtitle="Opportunity value and count by stage — values in Cr."
           >
-            <div className="h-[calc(100%-4.5rem)] min-h-0 overflow-hidden rounded-xl border border-slate-200">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-slate-50">
-                    <th className="w-[50%] text-left px-3 py-2 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
-                    <th className="w-[25%] text-right px-3 py-2 font-semibold text-slate-600 border border-slate-200">Value</th>
-                    <th className="w-[25%] text-right px-3 py-2 font-semibold text-slate-600 border border-slate-200">Count</th>
+                    <th className="w-[50%] text-left px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
+                    <th className="w-[25%] text-right px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">Value</th>
+                    <th className="w-[25%] text-right px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">Count</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stageData.map((item) => (
                     <tr key={item.name} className="hover:bg-slate-50">
-                      <td className="px-3 py-1.5 font-medium text-slate-700 border border-slate-200">{item.name}</td>
-                      <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border border-slate-200">
+                      <td className="px-3 py-2 font-medium text-slate-700 border border-slate-200">{item.name}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-800 border border-slate-200">
                         {Number(item.value) > 0 ? Number(item.value).toFixed(2) : ""}
                       </td>
-                      <td className="px-3 py-1.5 text-right font-semibold text-slate-700 border border-slate-200">
+                      <td className="px-3 py-2 text-right font-semibold text-slate-700 border border-slate-200">
                         {Number(item.opportunities) > 0 ? Number(item.opportunities).toLocaleString("en-IN") : ""}
                       </td>
                     </tr>
                   ))}
                   <tr className="bg-slate-50 font-bold">
-                    <td className="px-3 py-2 text-slate-800 border border-slate-200">Grand Total</td>
-                    <td className="px-3 py-2 text-right text-slate-800 border border-slate-200">
+                    <td className="px-3 py-2.5 text-slate-800 border border-slate-200">Grand Total</td>
+                    <td className="px-3 py-2.5 text-right text-slate-800 border border-slate-200">
                       {stageData.reduce((sum, item) => sum + (Number(item.value) || 0), 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-800 border border-slate-200">
+                    <td className="px-3 py-2.5 text-right text-slate-800 border border-slate-200">
                       {stageData.reduce((sum, item) => sum + (Number(item.opportunities) || 0), 0).toLocaleString("en-IN")}
                     </td>
                   </tr>
@@ -2132,28 +2131,28 @@ function Opportunities({
             title="Representatives"
             subtitle="PCS Vertical × assigned representative — values in Cr."
           >
-            <div className="h-[calc(100%-4.5rem)] min-h-0 overflow-hidden rounded-xl border border-slate-200">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-slate-50">
-                    <th className="w-[34%] text-left px-3 py-2 font-semibold text-slate-600 border border-slate-200">PCS Vertical</th>
-                    <th className="w-[46%] text-left px-3 py-2 font-semibold text-slate-600 border border-slate-200">Representatives</th>
-                    <th className="w-[20%] text-right px-3 py-2 font-semibold text-slate-600 border border-slate-200">Value</th>
+                    <th className="w-[34%] text-left px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">PCS Vertical</th>
+                    <th className="w-[46%] text-left px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">Representatives</th>
+                    <th className="w-[20%] text-right px-3 py-2.5 font-semibold text-slate-600 border border-slate-200">Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {representativeData.map((item) => (
                     <tr key={item.vertical} className="hover:bg-slate-50">
-                      <td className="px-3 py-1.5 font-medium text-slate-700 border border-slate-200 whitespace-nowrap">{item.vertical}</td>
-                      <td className="px-3 py-1.5 text-slate-700 border border-slate-200 whitespace-nowrap">{item.representatives}</td>
-                      <td className="px-3 py-1.5 text-right font-semibold text-slate-800 border border-slate-200">
+                      <td className="px-3 py-2 font-medium text-slate-700 border border-slate-200 whitespace-nowrap">{item.vertical}</td>
+                      <td className="px-3 py-2 text-slate-700 border border-slate-200 whitespace-nowrap">{item.representatives}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-slate-800 border border-slate-200">
                         {item.value > 0 ? item.value.toFixed(2) : ""}
                       </td>
                     </tr>
                   ))}
                   <tr className="bg-slate-50 font-bold">
-                    <td className="px-3 py-2 text-slate-800 border border-slate-200" colSpan={2}>Grand Total</td>
-                    <td className="px-3 py-2 text-right text-slate-800 border border-slate-200">
+                    <td className="px-3 py-2.5 text-slate-800 border border-slate-200" colSpan={2}>Grand Total</td>
+                    <td className="px-3 py-2.5 text-right text-slate-800 border border-slate-200">
                       {representativeData.reduce((sum, item) => sum + (Number(item.value) || 0), 0).toFixed(2)}
                     </td>
                   </tr>
@@ -2165,50 +2164,53 @@ function Opportunities({
 
         {/* ===================================================
             OWNER × STAGE VALUE TABLE
+            No fixed-height viewport: every owner row is visible.
+            Horizontal scrolling is retained because the stage columns
+            are intentionally wide enough to remain readable.
         =================================================== */}
         <ChartCard
           title="Assigned To × Opportunity Stage"
           subtitle="Values in Cr. by assigned owner and opportunity stage"
         >
-          <div className="h-[720px] overflow-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm min-w-[980px] border-collapse">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[1080px] text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="sticky left-0 z-10 bg-slate-50 text-left px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
+                  <th className="sticky left-0 z-10 min-w-[145px] bg-slate-50 text-left px-4 py-3 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
                   {ownerStageData.stages.map((stage) => (
-                    <th key={stage} className="text-right px-4 py-3.5 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
+                    <th key={stage} className="min-w-[105px] text-right px-4 py-3 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
                   ))}
-                  <th className="text-right px-4 py-3.5 font-bold text-slate-700 whitespace-nowrap border border-slate-200">Grand Total</th>
+                  <th className="min-w-[110px] text-right px-4 py-3 font-bold text-slate-700 whitespace-nowrap border border-slate-200">Grand Total</th>
                 </tr>
               </thead>
               <tbody>
                 {ownerStageData.rows.map((row) => (
                   <tr key={row.name} className="hover:bg-slate-50">
-                    <td className="sticky left-0 z-[5] bg-white px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
+                    <td className="sticky left-0 z-[5] bg-white px-4 py-2.5 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
                     {ownerStageData.stages.map((stage) => {
                       const value = Number(row[stage]) || 0;
                       return (
-                        <td key={stage} className="px-4 py-3 text-right text-slate-700 whitespace-nowrap border border-slate-200">
+                        <td key={stage} className="min-w-[105px] px-4 py-2.5 text-right text-slate-700 whitespace-nowrap border border-slate-200">
                           {value > 0 ? value.toFixed(2) : ""}
                         </td>
                       );
                     })}
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800 whitespace-nowrap border border-slate-200">
+                    <td className="min-w-[110px] px-4 py-2.5 text-right font-semibold text-slate-800 whitespace-nowrap border border-slate-200">
                       {Number(row.total) > 0 ? Number(row.total).toFixed(2) : ""}
                     </td>
                   </tr>
                 ))}
                 <tr className="bg-slate-50 font-bold">
-                  <td className="sticky left-0 z-[5] bg-slate-50 px-4 py-3.5 text-slate-800 border border-slate-200">Grand Total</td>
+                  <td className="sticky left-0 z-[5] bg-slate-50 px-4 py-3 text-slate-800 border border-slate-200">Grand Total</td>
                   {ownerStageData.stages.map((stage) => {
                     const total = ownerStageData.rows.reduce((sum, row) => sum + (Number(row[stage]) || 0), 0);
                     return (
-                      <td key={stage} className="px-4 py-3.5 text-right text-slate-800 whitespace-nowrap border border-slate-200">
+                      <td key={stage} className="min-w-[105px] px-4 py-3 text-right text-slate-800 whitespace-nowrap border border-slate-200">
                         {total > 0 ? total.toFixed(2) : ""}
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3.5 text-right text-slate-900 whitespace-nowrap border border-slate-200">
+                  <td className="min-w-[110px] px-4 py-3 text-right text-slate-900 whitespace-nowrap border border-slate-200">
                     {ownerStageData.rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0).toFixed(2)}
                   </td>
                 </tr>
