@@ -2047,8 +2047,8 @@ function Opportunities({
           title="Opportunity Stage Summary"
           subtitle="Opportunity value and count by stage — values in Cr."
         >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse border border-slate-200">
+          <div className="h-[720px] overflow-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50">
                   <th className="w-[50%] text-left px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Opportunity Stage</th>
@@ -2090,8 +2090,8 @@ function Opportunities({
           title="Assigned To × Opportunity Stage"
           subtitle="Values in Cr. by assigned owner and opportunity stage"
         >
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm min-w-[900px] border-collapse">
+          <div className="h-[720px] overflow-auto rounded-xl border border-slate-200">
+            <table className="w-full text-sm min-w-[980px] border-collapse">
               <thead>
                 <tr className="bg-slate-50">
                   <th className="sticky left-0 z-10 bg-slate-50 text-left px-4 py-3.5 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
@@ -2179,16 +2179,113 @@ function Opportunities({
         title="Assigned To × Opportunity Stage"
         subtitle="Stacked value in Crores by owner and stage"
       >
-        <div style={{ height: `${Math.max(420, Math.min(900, ownerStageData.rows.length * 42 + 90))}px` }}>
+        <div style={{ height: `${Math.max(560, Math.min(980, ownerStageData.rows.length * 46 + 110))}px` }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ownerStageData.rows} layout="vertical" margin={{ top: 10, right: 90, left: 100, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-              <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => formatChartValue(value, currency, valueDisplay)} />
-              <YAxis type="category" dataKey="name" width={110} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#475569" }} />
-              <Tooltip content={<ChartTooltip currency={currency} valueDisplay={valueDisplay} />} />
-              <Legend />
+            <BarChart
+              data={ownerStageData.rows}
+              layout="vertical"
+              barGap={10}
+              barCategoryGap="18%"
+              margin={{ top: 12, right: 34, left: 92, bottom: 18 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                horizontal={false}
+                stroke="#e2e8f0"
+              />
+
+              <XAxis
+                type="number"
+                domain={[
+                  0,
+                  (dataMax) => Math.max(Number(dataMax) * 1.06, 1)
+                ]}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) =>
+                  formatChartValue(value, currency, valueDisplay)
+                }
+              />
+
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={92}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: "#475569", fontWeight: 500 }}
+              />
+
+              <Tooltip
+                content={
+                  <ChartTooltip
+                    currency={currency}
+                    valueDisplay={valueDisplay}
+                  />
+                }
+              />
+
+              <Legend
+                wrapperStyle={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  paddingTop: 8
+                }}
+              />
+
               {ownerStageData.stages.map((stage, index) => (
-                <Bar key={stage} dataKey={stage} stackId="ownerStage" name={stage} fill={["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#8b5cf6", "#f43f5e", "#14b8a6", "#64748b"][index % 8]} />
+                <Bar
+                  key={stage}
+                  dataKey={stage}
+                  stackId="ownerStage"
+                  name={stage}
+                  fill={
+                    [
+                      "#6366f1",
+                      "#06b6d4",
+                      "#10b981",
+                      "#f59e0b",
+                      "#8b5cf6",
+                      "#f43f5e",
+                      "#14b8a6",
+                      "#64748b"
+                    ][index % 8]
+                  }
+                  radius={index === ownerStageData.stages.length - 1 ? [0, 5, 5, 0] : 0}
+                  isAnimationActive={false}
+                >
+                  <LabelList
+                    content={(props) => {
+                      const { x, y, width, height, value } = props;
+                      const numeric = Number(value) || 0;
+
+                      // Keep labels inside meaningful segments only. Very tiny
+                      // segments remain visible by color without creating
+                      // unreadable/overlapping text.
+                      if (
+                        !numeric ||
+                        Number(width) < 32 ||
+                        Number(height) < 18
+                      ) {
+                        return null;
+                      }
+
+                      return (
+                        <text
+                          x={Number(x) + Number(width) / 2}
+                          y={Number(y) + Number(height) / 2}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#ffffff"
+                          fontSize={10}
+                          fontWeight={700}
+                        >
+                          {numeric.toFixed(2)}
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>
