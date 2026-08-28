@@ -1502,7 +1502,7 @@ function Opportunities({
       { vertical: "Fashion & Lifestyle", owners: ["Kapil Kumar"] },
       { vertical: "FMCD", owners: ["Pallavi Chandok", "Shashank Agarwal"] },
       { vertical: "Automobiles", owners: ["Rajesh Pattnaik", "Tapasmaya Sahoo"] },
-      { vertical: "E - Com + Q- Com (Combined)", owners: ["Sujit Parida"] },
+      { vertical: "E-Com + Q-Com", owners: ["Sujit Parida"] },
       { vertical: "FMCG", owners: ["Sunil Singh"] },
     ];
 
@@ -1516,7 +1516,14 @@ function Opportunities({
         const rowVertical = normalizeVertical(getPCSVertical(row));
         const targetVertical = normalizeVertical(vertical).replace(/combined$/, "");
         const rowOwner = getOwner(row).trim().toLowerCase();
-        const verticalMatches = rowVertical === targetVertical;
+
+        // E-Com + Q-Com is intentionally a combined vertical in this table.
+        // The source can contain E-Com and Q-Com as separate PCS Vertical
+        // values, so both must contribute to Sujit Parida's combined value.
+        const isEComQComCombined = /e\s*-?\s*com\s*\+\s*q\s*-?\s*com/i.test(vertical);
+        const verticalMatches = isEComQComCombined
+          ? ["ecom", "qcom", "ecomqcom"].includes(rowVertical)
+          : rowVertical === targetVertical;
         const ownerMatches = owners.some((owner) => rowOwner === owner.toLowerCase());
         return verticalMatches && ownerMatches
           ? sum + getOpportunityValueCrores(row)
@@ -2077,7 +2084,7 @@ function Opportunities({
           TOP STAGE TABLES + REPRESENTATIVES
       =================================================== */}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5 items-stretch">
 
         {/* LEFT: both tables are allowed to grow naturally so no rows are clipped */}
         <div className="flex flex-col gap-5 min-w-0">
@@ -2169,48 +2176,49 @@ function Opportunities({
             are intentionally wide enough to remain readable.
         =================================================== */}
         <ChartCard
+          className="h-full"
           title="Assigned To × Opportunity Stage"
           subtitle="Values in Cr. by assigned owner and opportunity stage"
         >
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 h-full">
             <table className="w-full min-w-[1080px] text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50">
                   <th className="sticky left-0 z-10 min-w-[145px] bg-slate-50 text-left px-4 py-3 font-semibold text-slate-600 border border-slate-200">Assigned To</th>
                   {ownerStageData.stages.map((stage) => (
-                    <th key={stage} className="min-w-[105px] text-right px-4 py-3 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
+                    <th key={stage} className="min-w-[105px] text-right px-3 py-2.5 font-semibold text-slate-600 whitespace-nowrap border border-slate-200">{stage}</th>
                   ))}
-                  <th className="min-w-[110px] text-right px-4 py-3 font-bold text-slate-700 whitespace-nowrap border border-slate-200">Grand Total</th>
+                  <th className="min-w-[110px] text-right px-3 py-2.5 font-bold text-slate-700 whitespace-nowrap border border-slate-200">Grand Total</th>
                 </tr>
               </thead>
               <tbody>
                 {ownerStageData.rows.map((row) => (
                   <tr key={row.name} className="hover:bg-slate-50">
-                    <td className="sticky left-0 z-[5] bg-white px-4 py-2.5 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
+                    <td className="sticky left-0 z-[5] bg-white px-3 py-2 font-semibold text-slate-700 whitespace-nowrap border border-slate-200">{row.name}</td>
                     {ownerStageData.stages.map((stage) => {
                       const value = Number(row[stage]) || 0;
                       return (
-                        <td key={stage} className="min-w-[105px] px-4 py-2.5 text-right text-slate-700 whitespace-nowrap border border-slate-200">
+                        <td key={stage} className="min-w-[105px] px-3 py-2 text-right text-slate-700 whitespace-nowrap border border-slate-200">
                           {value > 0 ? value.toFixed(2) : ""}
                         </td>
                       );
                     })}
-                    <td className="min-w-[110px] px-4 py-2.5 text-right font-semibold text-slate-800 whitespace-nowrap border border-slate-200">
+                    <td className="min-w-[110px] px-3 py-2 text-right font-semibold text-slate-800 whitespace-nowrap border border-slate-200">
                       {Number(row.total) > 0 ? Number(row.total).toFixed(2) : ""}
                     </td>
                   </tr>
                 ))}
                 <tr className="bg-slate-50 font-bold">
-                  <td className="sticky left-0 z-[5] bg-slate-50 px-4 py-3 text-slate-800 border border-slate-200">Grand Total</td>
+                  <td className="sticky left-0 z-[5] bg-slate-50 px-3 py-2.5 text-slate-800 border border-slate-200">Grand Total</td>
                   {ownerStageData.stages.map((stage) => {
                     const total = ownerStageData.rows.reduce((sum, row) => sum + (Number(row[stage]) || 0), 0);
                     return (
-                      <td key={stage} className="min-w-[105px] px-4 py-3 text-right text-slate-800 whitespace-nowrap border border-slate-200">
+                      <td key={stage} className="min-w-[105px] px-3 py-2.5 text-right text-slate-800 whitespace-nowrap border border-slate-200">
                         {total > 0 ? total.toFixed(2) : ""}
                       </td>
                     );
                   })}
-                  <td className="min-w-[110px] px-4 py-3 text-right text-slate-900 whitespace-nowrap border border-slate-200">
+                  <td className="min-w-[110px] px-3 py-2.5 text-right text-slate-900 whitespace-nowrap border border-slate-200">
                     {ownerStageData.rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0).toFixed(2)}
                   </td>
                 </tr>
