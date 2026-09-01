@@ -4,12 +4,11 @@ import {
   Trophy,
   IndianRupee,
   TrendingUp,
-  Users,
   Target,
   CalendarDays,
-  Download,
   Search,
   X,
+  Download,
 } from "lucide-react";
 
 import {
@@ -36,9 +35,14 @@ import SectionHeader from "../components/dashboard/SectionHeader";
 ========================================================= */
 
 function text(value) {
-  return value === null || value === undefined
-    ? ""
-    : String(value).trim();
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  return String(value).trim();
 }
 
 
@@ -53,22 +57,29 @@ function num(value) {
   }
 
   if (typeof value === "number") {
+
     return Number.isFinite(value)
       ? value
       : 0;
+
   }
 
   const cleaned =
     String(value)
       .replace(/[₹,%\s,]/g, "");
 
-  const n = Number(cleaned);
+  const n =
+    Number(cleaned);
 
   return Number.isFinite(n)
     ? n
     : 0;
 }
 
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
 
 function dateValue(value) {
 
@@ -85,7 +96,7 @@ function dateValue(value) {
 
   if (typeof value === "number") {
 
-    const date =
+    const d =
       new Date(
         Date.UTC(
           1899,
@@ -93,51 +104,52 @@ function dateValue(value) {
           30
         ) +
         value *
-        86400000
+          86400000
       );
 
     return Number.isNaN(
-      date.getTime()
+      d.getTime()
     )
       ? null
-      : date;
+      : d;
+
   }
 
-  const date =
+  const d =
     new Date(value);
 
   return Number.isNaN(
-    date.getTime()
+    d.getTime()
   )
     ? null
-    : date;
+    : d;
 }
 
 
 function yearOf(value) {
 
-  const date =
+  const d =
     dateValue(value);
 
-  return date
-    ? date.getFullYear()
+  return d
+    ? d.getFullYear()
     : null;
 }
 
 
 /* =========================================================
-   VALUE CALCULATION
+   GENERIC VALUE GETTER
 ========================================================= */
 
 function getValue(row) {
 
-  const valuesCr =
+  const valuesInCr =
     num(
       row?.["Values in Cr"]
     );
 
-  if (valuesCr) {
-    return valuesCr;
+  if (valuesInCr) {
+    return valuesInCr;
   }
 
 
@@ -149,7 +161,10 @@ function getValue(row) {
     );
 
   if (annual) {
-    return annual / 10000000;
+    return (
+      annual /
+      10000000
+    );
   }
 
 
@@ -161,9 +176,13 @@ function getValue(row) {
     );
 
   if (monthly) {
+
     return (
-      monthly * 12
-    ) / 10000000;
+      monthly *
+      12 /
+      10000000
+    );
+
   }
 
 
@@ -172,7 +191,7 @@ function getValue(row) {
 
 
 /* =========================================================
-   FIRST AVAILABLE VALUE
+   FLEXIBLE COLUMN GETTER
 ========================================================= */
 
 function first(
@@ -193,9 +212,43 @@ function first(
     if (value) {
       return value;
     }
+
   }
 
   return fallback;
+}
+
+
+/* =========================================================
+   WON YEAR
+========================================================= */
+
+function getWonYear(row) {
+
+  const stored =
+    num(
+      row?.["Won Year"]
+    );
+
+  if (stored) {
+    return String(
+      stored
+    );
+  }
+
+
+  return String(
+    yearOf(
+      row?.["Date won"]
+    ) ||
+    yearOf(
+      row?.["Won Date"]
+    ) ||
+    yearOf(
+      row?.["Onboarded date"]
+    ) ||
+    "Unknown"
+  );
 }
 
 
@@ -208,27 +261,13 @@ function formatCr(value) {
   const n =
     num(value);
 
-  if (
-    Math.abs(n) >= 100
-  ) {
-    return `₹${n.toFixed(1)} Cr`;
-  }
-
-  if (
-    Math.abs(n) >= 10
-  ) {
-    return `₹${n.toFixed(2)} Cr`;
-  }
-
   return `₹${n.toFixed(2)} Cr`;
 }
 
 
 function formatPct(value) {
 
-  return `${(
-    num(value) * 100
-  ).toFixed(1)}%`;
+  return `${num(value).toFixed(1)}%`;
 }
 
 
@@ -255,7 +294,11 @@ function unique(
     ...new Set(
       rows
         .map(getter)
-        .filter(Boolean)
+        .filter(
+          (value) =>
+            value &&
+            value !== "Unknown"
+        )
     ),
   ].sort(
     (a, b) =>
@@ -277,6 +320,7 @@ function aggregate(
 
   const map =
     new Map();
+
 
   rows.forEach(
     (row) => {
@@ -367,16 +411,14 @@ function CustomTooltip({
       {payload.map(
         (item, index) => {
 
-          const name =
+          const isValue =
             String(
               item.name || ""
-            ).toLowerCase();
-
-
-          const isValue =
-            name.includes(
-              "value"
-            );
+            )
+              .toLowerCase()
+              .includes(
+                "value"
+              );
 
 
           return (
@@ -410,6 +452,84 @@ function CustomTooltip({
     </div>
 
   );
+}
+
+
+/* =========================================================
+   LABELS
+========================================================= */
+
+function CountLabel({
+  x,
+  y,
+  width,
+  value,
+}) {
+
+  if (
+    value ===
+      undefined ||
+    value === null
+  ) {
+    return null;
+  }
+
+
+  return (
+
+    <text
+      x={
+        x +
+        width / 2
+      }
+      y={
+        y - 8
+      }
+      textAnchor="middle"
+      fill="#64748b"
+      fontSize={11}
+      fontWeight={700}
+    >
+      {formatInt(value)}
+    </text>
+
+  );
+
+}
+
+
+function ValueLabel({
+  x,
+  y,
+  width,
+  value,
+}) {
+
+  if (!value) {
+    return null;
+  }
+
+
+  return (
+
+    <text
+      x={
+        x +
+        width / 2
+      }
+      y={
+        y - 8
+      }
+      textAnchor="middle"
+      fill="#475569"
+      fontSize={11}
+      fontWeight={700}
+    >
+      {formatCr(value)}
+    </text>
+
+  );
+
 }
 
 
@@ -482,98 +602,22 @@ function downloadCSV(
     );
 
 
-  const anchor =
+  const link =
     document.createElement(
       "a"
     );
 
-  anchor.href = url;
+  link.href =
+    url;
 
-  anchor.download =
+  link.download =
     filename;
 
-  anchor.click();
+  link.click();
+
 
   URL.revokeObjectURL(
     url
-  );
-}
-
-
-/* =========================================================
-   CHART LABELS
-========================================================= */
-
-function ValueLabel({
-  x,
-  y,
-  width,
-  value,
-}) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return null;
-  }
-
-
-  return (
-
-    <text
-      x={
-        x +
-        width / 2
-      }
-      y={
-        y - 8
-      }
-      textAnchor="middle"
-      fill="#475569"
-      fontSize={11}
-      fontWeight={700}
-    >
-      {formatCr(value)}
-    </text>
-
-  );
-}
-
-
-function CountLabel({
-  x,
-  y,
-  width,
-  value,
-}) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return null;
-  }
-
-
-  return (
-
-    <text
-      x={
-        x +
-        width / 2
-      }
-      y={
-        y - 8
-      }
-      textAnchor="middle"
-      fill="#64748b"
-      fontSize={11}
-      fontWeight={700}
-    >
-      {formatInt(value)}
-    </text>
-
   );
 }
 
@@ -589,55 +633,180 @@ export default function WonAnalysis({
 
 
   /* =======================================================
-     SOURCE DATA
+     SOURCE = OPPORTUNITIES
   ======================================================= */
 
-  const rows =
+  const opportunities =
+    useMemo(() => {
+
+      if (
+        Array.isArray(
+          data?.opportunities
+        )
+      ) {
+
+        return data.opportunities;
+
+      }
+
+
+      if (
+        Array.isArray(
+          data?.currentOpportunities
+        )
+      ) {
+
+        return data.currentOpportunities;
+
+      }
+
+
+      if (
+        Array.isArray(
+          data?.processed?.opportunities
+        )
+      ) {
+
+        return data.processed.opportunities;
+
+      }
+
+
+      return [];
+
+    }, [data]);
+
+
+  /* =======================================================
+     ONLY WON OPPORTUNITIES
+  ======================================================= */
+
+  const wonOpportunities =
     useMemo(
       () => {
 
-        const source =
-          Array.isArray(
-            data?.opportunities
-          )
-            ? data.opportunities
-            : [];
-
-
-        /*
-         * IMPORTANT:
-         *
-         * Won Analysis is generated from
-         * the Opportunity dataset.
-         *
-         * The Excel "Won Analysis" sheet
-         * is NOT used as the source of
-         * dashboard calculations.
-         */
-
-        return source.filter(
+        return opportunities.filter(
           (row) => {
 
             const outcome =
+              first(
+                row,
+                [
+                  "Outcome bucket",
+                  "Outcome Bucket",
+                ],
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+
+            const stage =
               text(
                 row?.[
-                  "Outcome bucket"
+                  "Opportunity Stage"
                 ]
-              ).toLowerCase();
+              )
+                .trim()
+                .toLowerCase();
 
 
             return (
-              outcome === "won"
+              outcome ===
+                "won" ||
+              stage ===
+                "won"
             );
 
           }
         );
 
       },
-      [
-        data,
-      ]
+      [opportunities]
     );
+
+
+  /* =======================================================
+     FIELD GETTERS
+  ======================================================= */
+
+  const getOwner =
+    (row) =>
+      first(
+        row,
+        [
+          "Assigned To",
+          "Salesforce User Name",
+          "Sales Owner",
+        ]
+      );
+
+
+  const getPCSVertical =
+    (row) =>
+      first(
+        row,
+        [
+          "PCS Vertical",
+          "PCS  Vertical",
+          "PCS vertical",
+        ]
+      );
+
+
+  const getIndustry =
+    (row) =>
+      first(
+        row,
+        [
+          "Industry",
+        ]
+      );
+
+
+  const getRegion =
+    (row) =>
+      first(
+        row,
+        [
+          "Customer Service required region",
+          "PCS User Region",
+          "Region",
+        ]
+      );
+
+
+  const getDealSize =
+    (row) =>
+      first(
+        row,
+        [
+          "Deal Size Bucket",
+        ]
+      );
+
+
+  const getReason =
+    (row) =>
+      first(
+        row,
+        [
+          "Reason for changing incumbent",
+          "Reason for Changing Incumbent",
+        ]
+      );
+
+
+  const getService =
+    (row) =>
+      first(
+        row,
+        [
+          "Services Required",
+          "Capability Required",
+          "Capability required",
+        ]
+      );
 
 
   /* =======================================================
@@ -663,20 +832,20 @@ export default function WonAnalysis({
 
 
   const [
-    region,
-    setRegion,
-  ] = useState("All");
-
-
-  const [
     pcsVertical,
-    setPcsVertical,
+    setPCSVertical,
   ] = useState("All");
 
 
   const [
     industry,
     setIndustry,
+  ] = useState("All");
+
+
+  const [
+    region,
+    setRegion,
   ] = useState("All");
 
 
@@ -699,121 +868,6 @@ export default function WonAnalysis({
 
 
   /* =======================================================
-     FIELD GETTERS
-  ======================================================= */
-
-  const getOwner =
-    (row) =>
-      first(
-        row,
-        [
-          "Assigned To",
-          "Salesforce User Name",
-          "Sales Owner",
-        ]
-      );
-
-
-  const getRegion =
-    (row) =>
-      first(
-        row,
-        [
-          "PCS User Region",
-          "Customer Service required region",
-        ]
-      );
-
-
-  const getPCSVertical =
-    (row) =>
-      first(
-        row,
-        [
-          "PCS Vertical",
-        ]
-      );
-
-
-  const getIndustry =
-    (row) =>
-      first(
-        row,
-        [
-          "Industry",
-        ]
-      );
-
-
-  const getDealSize =
-    (row) =>
-      first(
-        row,
-        [
-          "Deal Size Bucket",
-        ]
-      );
-
-
-  const getReason =
-    (row) =>
-      first(
-        row,
-        [
-          "Reason for Changing Incumbent",
-          "Reason for changing incumbent",
-        ]
-      );
-
-
-  const getService =
-    (row) =>
-      first(
-        row,
-        [
-          "Capability Required",
-          "Capability required",
-          "Services Required",
-        ]
-      );
-
-
-  const getWonYear =
-    (row) => {
-
-      const stored =
-        num(
-          row?.[
-            "Won Year"
-          ]
-        );
-
-
-      if (stored) {
-        return String(
-          stored
-        );
-      }
-
-
-      return String(
-        yearOf(
-          row?.[
-            "Date won"
-          ]
-        ) ||
-        yearOf(
-          row?.[
-            "Onboarded date"
-          ]
-        ) ||
-        "Unknown"
-      );
-
-    };
-
-
-  /* =======================================================
      FILTER OPTIONS
   ======================================================= */
 
@@ -823,56 +877,54 @@ export default function WonAnalysis({
 
         years:
           unique(
-            rows,
+            wonOpportunities,
             getWonYear
           ),
 
         owners:
           unique(
-            rows,
+            wonOpportunities,
             getOwner
-          ),
-
-        regions:
-          unique(
-            rows,
-            getRegion
           ),
 
         pcsVerticals:
           unique(
-            rows,
+            wonOpportunities,
             getPCSVertical
           ),
 
         industries:
           unique(
-            rows,
+            wonOpportunities,
             getIndustry
+          ),
+
+        regions:
+          unique(
+            wonOpportunities,
+            getRegion
           ),
 
         dealSizes:
           unique(
-            rows,
+            wonOpportunities,
             getDealSize
           ),
 
         reasons:
           unique(
-            rows,
+            wonOpportunities,
             getReason
           ),
 
         services:
           unique(
-            rows,
+            wonOpportunities,
             getService
           ),
 
       }),
-      [
-        rows,
-      ]
+      [wonOpportunities]
     );
 
 
@@ -884,16 +936,16 @@ export default function WonAnalysis({
     useMemo(
       () => {
 
-        const query =
+        const q =
           search
             .toLowerCase()
             .trim();
 
 
-        return rows.filter(
+        return wonOpportunities.filter(
           (row) => {
 
-            const searchable = [
+            const haystack = [
 
               row?.[
                 "Opportunity Name"
@@ -909,9 +961,9 @@ export default function WonAnalysis({
 
               getIndustry(row),
 
-              getReason(row),
+              getRegion(row),
 
-              getService(row),
+              getReason(row),
 
             ]
               .map(text)
@@ -921,67 +973,74 @@ export default function WonAnalysis({
 
             return (
 
-              (
-                !query ||
-                searchable.includes(
-                  query
-                )
-              )
-
-              &&
+              (!q ||
+                haystack.includes(
+                  q
+                )) &&
 
               (
-                year === "All" ||
-                getWonYear(row) === year
-              )
-
-              &&
-
-              (
-                owner === "All" ||
-                getOwner(row) === owner
-              )
-
-              &&
+                year ===
+                  "All" ||
+                getWonYear(
+                  row
+                ) === year
+              ) &&
 
               (
-                region === "All" ||
-                getRegion(row) === region
-              )
-
-              &&
-
-              (
-                pcsVertical === "All" ||
-                getPCSVertical(row) === pcsVertical
-              )
-
-              &&
+                owner ===
+                  "All" ||
+                getOwner(
+                  row
+                ) === owner
+              ) &&
 
               (
-                industry === "All" ||
-                getIndustry(row) === industry
-              )
-
-              &&
-
-              (
-                dealSize === "All" ||
-                getDealSize(row) === dealSize
-              )
-
-              &&
+                pcsVertical ===
+                  "All" ||
+                getPCSVertical(
+                  row
+                ) ===
+                  pcsVertical
+              ) &&
 
               (
-                winReason === "All" ||
-                getReason(row) === winReason
-              )
-
-              &&
+                industry ===
+                  "All" ||
+                getIndustry(
+                  row
+                ) === industry
+              ) &&
 
               (
-                service === "All" ||
-                getService(row) === service
+                region ===
+                  "All" ||
+                getRegion(
+                  row
+                ) === region
+              ) &&
+
+              (
+                dealSize ===
+                  "All" ||
+                getDealSize(
+                  row
+                ) === dealSize
+              ) &&
+
+              (
+                winReason ===
+                  "All" ||
+                getReason(
+                  row
+                ) === winReason
+              ) &&
+
+              (
+                service ===
+                  "All" ||
+                getService(
+                  row
+                ) === service
               )
 
             );
@@ -991,13 +1050,13 @@ export default function WonAnalysis({
 
       },
       [
-        rows,
+        wonOpportunities,
         search,
         year,
         owner,
-        region,
         pcsVertical,
         industry,
+        region,
         dealSize,
         winReason,
         service,
@@ -1006,7 +1065,7 @@ export default function WonAnalysis({
 
 
   /* =======================================================
-     KPI METRICS
+     KPIs
   ======================================================= */
 
   const metrics =
@@ -1024,16 +1083,16 @@ export default function WonAnalysis({
 
         const total =
           values.reduce(
-            (sum, value) =>
-              sum + value,
+            (a, b) =>
+              a + b,
             0
           );
 
 
         const average =
-          filtered.length
+          values.length
             ? total /
-              filtered.length
+              values.length
             : 0;
 
 
@@ -1044,21 +1103,27 @@ export default function WonAnalysis({
 
 
         const median =
-          values.length
-            ? values.length % 2
+          values.length === 0
+            ? 0
+            : values.length % 2
               ? values[
-                  (values.length - 1) /
-                    2
+                  Math.floor(
+                    values.length /
+                      2
+                  )
                 ]
               : (
                   values[
-                    values.length / 2 - 1
+                    values.length /
+                      2 -
+                      1
                   ] +
                   values[
-                    values.length / 2
+                    values.length /
+                      2
                   ]
-                ) / 2
-            : 0;
+                ) /
+                2;
 
 
         const reasons =
@@ -1073,14 +1138,16 @@ export default function WonAnalysis({
 
 
         const topReason =
-          reasons[0]?.name ||
+          reasons[0]
+            ?.name ||
           "—";
 
 
         const topReasonShare =
           filtered.length
             ? (
-                reasons[0]?.count ||
+                reasons[0]
+                  ?.count ||
                 0
               ) /
               filtered.length
@@ -1114,14 +1181,12 @@ export default function WonAnalysis({
         };
 
       },
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
 
   /* =======================================================
-     CHART DATA
+     WIN REASON
   ======================================================= */
 
   const reasonData =
@@ -1130,16 +1195,54 @@ export default function WonAnalysis({
         aggregate(
           filtered,
           getReason
-        ).sort(
-          (a, b) =>
-            b.value -
-            a.value
-        ),
+        )
+          .sort(
+            (a, b) =>
+              b.value -
+              a.value
+          )
+          .map(
+            (item) => ({
+
+              ...item,
+
+              countShare:
+                metrics.count
+                  ? (
+                      item.count /
+                      metrics.count
+                    ) *
+                    100
+                  : 0,
+
+              valueShare:
+                metrics.total
+                  ? (
+                      item.value /
+                      metrics.total
+                    ) *
+                    100
+                  : 0,
+
+              avgDeal:
+                item.count
+                  ? item.value /
+                    item.count
+                  : 0,
+
+            })
+          ),
       [
         filtered,
+        metrics.count,
+        metrics.total,
       ]
     );
 
+
+  /* =======================================================
+     PCS VERTICAL
+  ======================================================= */
 
   const pcsVerticalData =
     useMemo(
@@ -1152,11 +1255,13 @@ export default function WonAnalysis({
             b.value -
             a.value
         ),
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
+
+  /* =======================================================
+     INDUSTRY
+  ======================================================= */
 
   const industryData =
     useMemo(
@@ -1169,11 +1274,13 @@ export default function WonAnalysis({
             b.value -
             a.value
         ),
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
+
+  /* =======================================================
+     REGION
+  ======================================================= */
 
   const regionData =
     useMemo(
@@ -1186,11 +1293,13 @@ export default function WonAnalysis({
             b.value -
             a.value
         ),
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
+
+  /* =======================================================
+     DEAL SIZE
+  ======================================================= */
 
   const dealData =
     useMemo(
@@ -1203,11 +1312,13 @@ export default function WonAnalysis({
             b.value -
             a.value
         ),
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
+
+  /* =======================================================
+     SERVICES
+  ======================================================= */
 
   const serviceData =
     useMemo(
@@ -1220,14 +1331,31 @@ export default function WonAnalysis({
             b.value -
             a.value
         ),
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
 
   /* =======================================================
-     YEARLY DATA
+     OWNER
+  ======================================================= */
+
+  const ownerData =
+    useMemo(
+      () =>
+        aggregate(
+          filtered,
+          getOwner
+        ).sort(
+          (a, b) =>
+            b.value -
+            a.value
+        ),
+      [filtered]
+    );
+
+
+  /* =======================================================
+     YOY
   ======================================================= */
 
   const yearly =
@@ -1241,21 +1369,28 @@ export default function WonAnalysis({
         filtered.forEach(
           (row) => {
 
-            const currentYear =
-              getWonYear(row);
+            const y =
+              getWonYear(
+                row
+              );
 
 
             if (
-              !map.has(
-                currentYear
-              )
+              y ===
+              "Unknown"
+            ) {
+              return;
+            }
+
+
+            if (
+              !map.has(y)
             ) {
 
               map.set(
-                currentYear,
+                y,
                 {
-                  year:
-                    currentYear,
+                  year: y,
                   count: 0,
                   value: 0,
                 }
@@ -1265,9 +1400,7 @@ export default function WonAnalysis({
 
 
             const item =
-              map.get(
-                currentYear
-              );
+              map.get(y);
 
 
             item.count += 1;
@@ -1279,69 +1412,85 @@ export default function WonAnalysis({
         );
 
 
-        const result =
+        const arr =
           [
             ...map.values(),
-          ]
-            .filter(
-              (item) =>
-                item.year !==
-                "Unknown"
-            )
-            .sort(
-              (a, b) =>
-                Number(a.year) -
-                Number(b.year)
-            );
+          ].sort(
+            (a, b) =>
+              Number(a.year) -
+              Number(b.year)
+          );
 
 
-        return result.map(
-          (item, index) => ({
+        return arr.map(
+          (item, index) => {
 
-            ...item,
+            const previous =
+              arr[
+                index - 1
+              ];
 
-            countGrowth:
-              index
-                ? (
-                    item.count -
-                    result[
-                      index - 1
-                    ].count
-                  ) /
-                  (
-                    result[
-                      index - 1
-                    ].count || 1
-                  )
-                : null,
 
-            valueGrowth:
-              index
-                ? (
-                    item.value -
-                    result[
-                      index - 1
-                    ].value
-                  ) /
-                  (
-                    result[
-                      index - 1
-                    ].value || 1
-                  )
-                : null,
+            return {
 
-          })
+              ...item,
+
+              countShare:
+                metrics.count
+                  ? (
+                      item.count /
+                      metrics.count
+                    ) *
+                    100
+                  : 0,
+
+              valueShare:
+                metrics.total
+                  ? (
+                      item.value /
+                      metrics.total
+                    ) *
+                    100
+                  : 0,
+
+              countGrowth:
+                previous &&
+                previous.count
+                  ? (
+                      item.count -
+                      previous.count
+                    ) /
+                    previous.count *
+                    100
+                  : null,
+
+              valueGrowth:
+                previous &&
+                previous.value
+                  ? (
+                      item.value -
+                      previous.value
+                    ) /
+                    previous.value *
+                    100
+                  : null,
+
+            };
+
+          }
         );
 
       },
       [
         filtered,
+        metrics.count,
+        metrics.total,
       ]
     );
 
 
   /* =======================================================
-     REASON BY YEAR
+     YEAR × WIN REASON
   ======================================================= */
 
   const reasonByYear =
@@ -1356,8 +1505,8 @@ export default function WonAnalysis({
                   getWonYear
                 )
                 .filter(
-                  (value) =>
-                    value !==
+                  (y) =>
+                    y !==
                     "Unknown"
                 )
             ),
@@ -1379,34 +1528,32 @@ export default function WonAnalysis({
 
 
         return years.map(
-          (currentYear) => {
+          (yearValue) => {
 
             const row = {
               year:
-                currentYear,
+                yearValue,
             };
 
 
-            reasons
-              .slice(0, 10)
-              .forEach(
-                (reason) => {
+            reasons.forEach(
+              (reason) => {
 
-                  row[reason] =
-                    filtered.filter(
-                      (item) =>
-                        getWonYear(
-                          item
-                        ) ===
-                          currentYear &&
-                        getReason(
-                          item
-                        ) ===
-                          reason
-                    ).length;
+                row[reason] =
+                  filtered.filter(
+                    (r) =>
+                      getWonYear(
+                        r
+                      ) ===
+                        yearValue &&
+                      getReason(
+                        r
+                      ) ===
+                        reason
+                  ).length;
 
-                }
-              );
+              }
+            );
 
 
             return row;
@@ -1415,14 +1562,12 @@ export default function WonAnalysis({
         );
 
       },
-      [
-        filtered,
-      ]
+      [filtered]
     );
 
 
   /* =======================================================
-     FILTER CONTROLS
+     CLEAR FILTERS
   ======================================================= */
 
   const clearFilters =
@@ -1434,11 +1579,11 @@ export default function WonAnalysis({
 
       setOwner("All");
 
-      setRegion("All");
-
-      setPcsVertical("All");
+      setPCSVertical("All");
 
       setIndustry("All");
+
+      setRegion("All");
 
       setDealSize("All");
 
@@ -1450,30 +1595,30 @@ export default function WonAnalysis({
 
 
   const activeFilters =
-    [
-      year,
-      owner,
-      region,
-      pcsVertical,
-      industry,
-      dealSize,
-      winReason,
-      service,
-    ].filter(
-      (value) =>
-        value !== "All"
-    ).length ||
-    Boolean(search);
+    Boolean(
+      search ||
+      year !== "All" ||
+      owner !== "All" ||
+      pcsVertical !== "All" ||
+      industry !== "All" ||
+      region !== "All" ||
+      dealSize !== "All" ||
+      winReason !== "All" ||
+      service !== "All"
+    );
 
 
-  function Select({
-    value,
-    setValue,
-    values,
-    label,
-  }) {
+  /* =======================================================
+     SELECT COMPONENT
+  ======================================================= */
 
-    return (
+  const Select =
+    ({
+      value,
+      setValue,
+      values,
+      label,
+    }) => (
 
       <select
         value={value}
@@ -1502,7 +1647,6 @@ export default function WonAnalysis({
           All {label}
         </option>
 
-
         {values.map(
           (value) => (
 
@@ -1519,12 +1663,11 @@ export default function WonAnalysis({
       </select>
 
     );
-  }
 
 
-  /* =========================================================
+  /* =======================================================
      PAGE
-  ========================================================= */
+  ======================================================= */
 
   return (
 
@@ -1532,23 +1675,20 @@ export default function WonAnalysis({
       className="
         space-y-7
         pb-10
-        px-6
-        pt-6
       "
     >
 
       <SectionHeader
         title="Won Analysis"
         subtitle="
-          Deep analysis of closed-won opportunities,
-          value contribution and win drivers
+          Analysis of won opportunities based directly on the Opportunities dataset
         "
       />
 
 
-      {/* =====================================================
+      {/* ===================================================
           FILTERS
-      ===================================================== */}
+      =================================================== */}
 
       <div
         className="
@@ -1571,6 +1711,8 @@ export default function WonAnalysis({
           "
         >
 
+          {/* SEARCH */}
+
           <div
             className="
               relative
@@ -1591,9 +1733,9 @@ export default function WonAnalysis({
 
             <input
               value={search}
-              onChange={(event) =>
+              onChange={(e) =>
                 setSearch(
-                  event.target.value
+                  e.target.value
                 )
               }
               placeholder="
@@ -1620,7 +1762,9 @@ export default function WonAnalysis({
           <Select
             value={year}
             setValue={setYear}
-            values={options.years}
+            values={
+              options.years
+            }
             label="Won Years"
           />
 
@@ -1628,22 +1772,18 @@ export default function WonAnalysis({
           <Select
             value={owner}
             setValue={setOwner}
-            values={options.owners}
+            values={
+              options.owners
+            }
             label="Owners"
           />
 
 
           <Select
-            value={region}
-            setValue={setRegion}
-            values={options.regions}
-            label="Regions"
-          />
-
-
-          <Select
             value={pcsVertical}
-            setValue={setPcsVertical}
+            setValue={
+              setPCSVertical
+            }
             values={
               options.pcsVerticals
             }
@@ -1653,7 +1793,9 @@ export default function WonAnalysis({
 
           <Select
             value={industry}
-            setValue={setIndustry}
+            setValue={
+              setIndustry
+            }
             values={
               options.industries
             }
@@ -1662,8 +1804,22 @@ export default function WonAnalysis({
 
 
           <Select
+            value={region}
+            setValue={
+              setRegion
+            }
+            values={
+              options.regions
+            }
+            label="Regions"
+          />
+
+
+          <Select
             value={dealSize}
-            setValue={setDealSize}
+            setValue={
+              setDealSize
+            }
             values={
               options.dealSizes
             }
@@ -1673,7 +1829,9 @@ export default function WonAnalysis({
 
           <Select
             value={winReason}
-            setValue={setWinReason}
+            setValue={
+              setWinReason
+            }
             values={
               options.reasons
             }
@@ -1683,7 +1841,9 @@ export default function WonAnalysis({
 
           <Select
             value={service}
-            setValue={setService}
+            setValue={
+              setService
+            }
             values={
               options.services
             }
@@ -1713,11 +1873,11 @@ export default function WonAnalysis({
             {formatInt(
               filtered.length
             )}{" "}
-            won deals
+            won opportunities
           </span>
 
 
-          {activeFilters ? (
+          {activeFilters && (
 
             <button
               onClick={
@@ -1737,22 +1897,24 @@ export default function WonAnalysis({
               "
             >
 
-              <X size={13} />
+              <X
+                size={13}
+              />
 
               Clear filters
 
             </button>
 
-          ) : null}
+          )}
 
         </div>
 
       </div>
 
 
-      {/* =====================================================
-          KPIs
-      ===================================================== */}
+      {/* ===================================================
+          KPI SECTION
+      =================================================== */}
 
       <div
         className="
@@ -1809,7 +1971,7 @@ export default function WonAnalysis({
 
 
         <KPI
-          title="Median Deal Size"
+          title="Median Value Won"
           value={
             formatCr(
               metrics.median
@@ -1829,13 +1991,13 @@ export default function WonAnalysis({
 
 
         <KPI
-          title="Top Reason Share"
+          title="Top Reason Share %"
           value={
             formatPct(
               metrics.topReasonShare
             )
           }
-          icon={Users}
+          icon={Target}
         />
 
 
@@ -1852,15 +2014,14 @@ export default function WonAnalysis({
       </div>
 
 
-      {/* =====================================================
+      {/* ===================================================
           WIN DRIVERS
-      ===================================================== */}
+      =================================================== */}
 
       <SectionHeader
         title="Win Drivers"
         subtitle="
-          Why customers changed providers
-          and where won value is concentrated
+          Why customers changed providers and where won value is concentrated
         "
       />
 
@@ -1874,19 +2035,19 @@ export default function WonAnalysis({
         "
       >
 
-        {/* ---------------------------------------------------
-            WIN REASON
-        --------------------------------------------------- */}
+        {/* REASON */}
 
         <ChartCard
           title="Incumbent Change Reason"
           subtitle="
-            Won deal count and value by reason
+            Won deal count, share, value and average deal size
           "
         >
 
           <div
-            className="h-[430px]"
+            className="
+              h-[460px]
+            "
           >
 
             <ResponsiveContainer
@@ -1901,8 +2062,8 @@ export default function WonAnalysis({
                 layout="vertical"
                 margin={{
                   top: 20,
-                  right: 65,
-                  left: 120,
+                  right: 70,
+                  left: 125,
                   bottom: 20,
                 }}
               >
@@ -1921,7 +2082,7 @@ export default function WonAnalysis({
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={115}
+                  width={120}
                   axisLine={false}
                   tickLine={false}
                   tick={{
@@ -1936,7 +2097,6 @@ export default function WonAnalysis({
                 />
 
                 <Legend />
-
 
                 <Bar
                   dataKey="count"
@@ -1988,19 +2148,19 @@ export default function WonAnalysis({
         </ChartCard>
 
 
-        {/* ---------------------------------------------------
-            PCS VERTICAL
-        --------------------------------------------------- */}
+        {/* PCS VERTICAL */}
 
         <ChartCard
           title="Win by PCS Vertical"
           subtitle="
-            Won deals and won value by PCS Vertical
+            Won opportunities and won value by PCS Vertical
           "
         >
 
           <div
-            className="h-[430px]"
+            className="
+              h-[460px]
+            "
           >
 
             <ResponsiveContainer
@@ -2013,10 +2173,10 @@ export default function WonAnalysis({
                   pcsVerticalData
                 }
                 margin={{
-                  top: 30,
-                  right: 35,
+                  top: 25,
+                  right: 25,
                   left: 10,
-                  bottom: 70,
+                  bottom: 65,
                 }}
               >
 
@@ -2027,7 +2187,7 @@ export default function WonAnalysis({
 
                 <XAxis
                   dataKey="name"
-                  angle={-32}
+                  angle={-30}
                   textAnchor="end"
                   interval={0}
                   height={85}
@@ -2051,7 +2211,6 @@ export default function WonAnalysis({
 
                 <Legend />
 
-
                 <Bar
                   dataKey="count"
                   name="Count"
@@ -2104,15 +2263,14 @@ export default function WonAnalysis({
       </div>
 
 
-      {/* =====================================================
-          YEARLY ANALYSIS
-      ===================================================== */}
+      {/* ===================================================
+          YOY
+      =================================================== */}
 
       <SectionHeader
         title="YOY Win Trend & Contribution"
         subtitle="
-          Annual won count, value, growth and
-          contribution to the filtered portfolio
+          Annual won count, value, growth and contribution
         "
       />
 
@@ -2129,12 +2287,14 @@ export default function WonAnalysis({
         <ChartCard
           title="YOY Won Trend"
           subtitle="
-            Won deals and value by year
+            Won deals and won value by year
           "
         >
 
           <div
-            className="h-[390px]"
+            className="
+              h-[420px]
+            "
           >
 
             <ResponsiveContainer
@@ -2184,7 +2344,6 @@ export default function WonAnalysis({
 
                 <Legend />
 
-
                 <Line
                   yAxisId="count"
                   type="monotone"
@@ -2196,7 +2355,6 @@ export default function WonAnalysis({
                     r: 4,
                   }}
                 />
-
 
                 <Line
                   yAxisId="value"
@@ -2227,7 +2385,9 @@ export default function WonAnalysis({
         >
 
           <div
-            className="h-[390px]"
+            className="
+              h-[420px]
+            "
           >
 
             <ResponsiveContainer
@@ -2237,31 +2397,7 @@ export default function WonAnalysis({
 
               <BarChart
                 data={
-                  yearly.map(
-                    (item) => ({
-
-                      ...item,
-
-                      countShare:
-                        metrics.count
-                          ? (
-                              item.count /
-                              metrics.count
-                            ) *
-                            100
-                          : 0,
-
-                      valueShare:
-                        metrics.total
-                          ? (
-                              item.value /
-                              metrics.total
-                            ) *
-                            100
-                          : 0,
-
-                    })
-                  )
+                  yearly
                 }
                 margin={{
                   top: 25,
@@ -2292,12 +2428,13 @@ export default function WonAnalysis({
                   formatter={(value) =>
                     `${Number(
                       value
-                    ).toFixed(1)}%`
+                    ).toFixed(
+                      1
+                    )}%`
                   }
                 />
 
                 <Legend />
-
 
                 <Bar
                   dataKey="countShare"
@@ -2310,7 +2447,6 @@ export default function WonAnalysis({
                     0,
                   ]}
                 />
-
 
                 <Bar
                   dataKey="valueShare"
@@ -2335,20 +2471,21 @@ export default function WonAnalysis({
       </div>
 
 
-      {/* =====================================================
-          REASON TREND
-      ===================================================== */}
+      {/* ===================================================
+          YEAR-WISE WIN REASON
+      =================================================== */}
 
       <ChartCard
         title="Year-wise Win Reason Trend"
         subtitle="
-          Won deal count by incumbent-change
-          reason and year
+          Won deal count by incumbent-change reason and year
         "
       >
 
         <div
-          className="h-[450px]"
+          className="
+            h-[460px]
+          "
         >
 
           <ResponsiveContainer
@@ -2389,7 +2526,6 @@ export default function WonAnalysis({
 
               <Legend />
 
-
               {[
                 ...new Set(
                   filtered.map(
@@ -2397,7 +2533,10 @@ export default function WonAnalysis({
                   )
                 ),
               ]
-                .slice(0, 10)
+                .slice(
+                  0,
+                  10
+                )
                 .map(
                   (
                     reason,
@@ -2405,9 +2544,15 @@ export default function WonAnalysis({
                   ) => (
 
                     <Bar
-                      key={reason}
-                      dataKey={reason}
-                      name={reason}
+                      key={
+                        reason
+                      }
+                      dataKey={
+                        reason
+                      }
+                      name={
+                        reason
+                      }
                       stackId="won"
                       fill={
                         [
@@ -2422,7 +2567,8 @@ export default function WonAnalysis({
                           "#64748b",
                           "#f97316",
                         ][
-                          index % 10
+                          index %
+                            10
                         ]
                       }
                     />
@@ -2439,15 +2585,14 @@ export default function WonAnalysis({
       </ChartCard>
 
 
-      {/* =====================================================
+      {/* ===================================================
           PORTFOLIO MIX
-      ===================================================== */}
+      =================================================== */}
 
       <SectionHeader
         title="Won Portfolio Mix"
         subtitle="
-          Regional, industry, deal-size and
-          service-level contribution
+          Regional, industrial, deal-size, owner and service contribution
         "
       />
 
@@ -2461,6 +2606,8 @@ export default function WonAnalysis({
         "
       >
 
+        {/* REGION */}
+
         <ChartCard
           title="Win by Region"
           subtitle="
@@ -2469,7 +2616,9 @@ export default function WonAnalysis({
         >
 
           <div
-            className="h-[400px]"
+            className="
+              h-[430px]
+            "
           >
 
             <ResponsiveContainer
@@ -2482,10 +2631,10 @@ export default function WonAnalysis({
                   regionData
                 }
                 margin={{
-                  top: 30,
-                  right: 30,
+                  top: 25,
+                  right: 25,
                   left: 10,
-                  bottom: 35,
+                  bottom: 30,
                 }}
               >
 
@@ -2513,7 +2662,6 @@ export default function WonAnalysis({
 
                 <Legend />
 
-
                 <Bar
                   dataKey="count"
                   name="Count"
@@ -2533,7 +2681,6 @@ export default function WonAnalysis({
                   />
 
                 </Bar>
-
 
                 <Bar
                   dataKey="value"
@@ -2564,6 +2711,8 @@ export default function WonAnalysis({
         </ChartCard>
 
 
+        {/* DEAL SIZE */}
+
         <ChartCard
           title="Win by Deal Size"
           subtitle="
@@ -2572,7 +2721,9 @@ export default function WonAnalysis({
         >
 
           <div
-            className="h-[400px]"
+            className="
+              h-[430px]
+            "
           >
 
             <ResponsiveContainer
@@ -2585,10 +2736,10 @@ export default function WonAnalysis({
                   dealData
                 }
                 margin={{
-                  top: 30,
-                  right: 30,
+                  top: 25,
+                  right: 25,
                   left: 10,
-                  bottom: 35,
+                  bottom: 30,
                 }}
               >
 
@@ -2616,7 +2767,6 @@ export default function WonAnalysis({
 
                 <Legend />
 
-
                 <Bar
                   dataKey="count"
                   name="Count"
@@ -2637,6 +2787,229 @@ export default function WonAnalysis({
 
                 </Bar>
 
+                <Bar
+                  dataKey="value"
+                  name="Value"
+                  fill="#14b8a6"
+                  radius={[
+                    6,
+                    6,
+                    0,
+                    0,
+                  ]}
+                >
+
+                  <LabelList
+                    content={
+                      <ValueLabel />
+                    }
+                  />
+
+                </Bar>
+
+              </BarChart>
+
+            </ResponsiveContainer>
+
+          </div>
+
+        </ChartCard>
+
+
+        {/* OWNER */}
+
+        <ChartCard
+          title="Won Performance by Owner"
+          subtitle="
+            Won count and value by sales owner
+          "
+        >
+
+          <div
+            className="
+              h-[430px]
+            "
+          >
+
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+
+              <BarChart
+                data={
+                  ownerData
+                }
+                layout="vertical"
+                margin={{
+                  top: 20,
+                  right: 70,
+                  left: 125,
+                  bottom: 20,
+                }}
+              >
+
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  horizontal={false}
+                />
+
+                <XAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                />
+
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={120}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{
+                    fontSize: 11,
+                  }}
+                />
+
+                <Tooltip
+                  content={
+                    <CustomTooltip />
+                  }
+                />
+
+                <Legend />
+
+                <Bar
+                  dataKey="count"
+                  name="Count"
+                  fill="#6366f1"
+                  radius={[
+                    0,
+                    6,
+                    6,
+                    0,
+                  ]}
+                >
+
+                  <LabelList
+                    content={
+                      <CountLabel />
+                    }
+                  />
+
+                </Bar>
+
+                <Bar
+                  dataKey="value"
+                  name="Value"
+                  fill="#14b8a6"
+                  radius={[
+                    0,
+                    6,
+                    6,
+                    0,
+                  ]}
+                >
+
+                  <LabelList
+                    content={
+                      <ValueLabel />
+                    }
+                  />
+
+                </Bar>
+
+              </BarChart>
+
+            </ResponsiveContainer>
+
+          </div>
+
+        </ChartCard>
+
+
+        {/* INDUSTRY */}
+
+        <ChartCard
+          title="Win by Industrial Vertical"
+          subtitle="
+            Won deals and value by industry
+          "
+        >
+
+          <div
+            className="
+              h-[430px]
+            "
+          >
+
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+
+              <BarChart
+                data={
+                  industryData
+                }
+                margin={{
+                  top: 25,
+                  right: 25,
+                  left: 10,
+                  bottom: 70,
+                }}
+              >
+
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+
+                <XAxis
+                  dataKey="name"
+                  angle={-30}
+                  textAnchor="end"
+                  interval={0}
+                  height={85}
+                  tick={{
+                    fontSize: 11,
+                  }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                />
+
+                <Tooltip
+                  content={
+                    <CustomTooltip />
+                  }
+                />
+
+                <Legend />
+
+                <Bar
+                  dataKey="count"
+                  name="Count"
+                  fill="#6366f1"
+                  radius={[
+                    6,
+                    6,
+                    0,
+                    0,
+                  ]}
+                >
+
+                  <LabelList
+                    content={
+                      <CountLabel />
+                    }
+                  />
+
+                </Bar>
 
                 <Bar
                   dataKey="value"
@@ -2669,133 +3042,21 @@ export default function WonAnalysis({
       </div>
 
 
-      {/* =====================================================
-          INDUSTRY
-      ===================================================== */}
-
-      <ChartCard
-        title="Win by Industry"
-        subtitle="
-          Won deals and won value by industry
-        "
-      >
-
-        <div
-          className="h-[420px]"
-        >
-
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-          >
-
-            <BarChart
-              data={
-                industryData
-              }
-              margin={{
-                top: 30,
-                right: 30,
-                left: 10,
-                bottom: 70,
-              }}
-            >
-
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-              />
-
-              <XAxis
-                dataKey="name"
-                angle={-32}
-                textAnchor="end"
-                interval={0}
-                height={85}
-                tick={{
-                  fontSize: 11,
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <Tooltip
-                content={
-                  <CustomTooltip />
-                }
-              />
-
-              <Legend />
-
-
-              <Bar
-                dataKey="count"
-                name="Count"
-                fill="#6366f1"
-                radius={[
-                  6,
-                  6,
-                  0,
-                  0,
-                ]}
-              >
-
-                <LabelList
-                  content={
-                    <CountLabel />
-                  }
-                />
-
-              </Bar>
-
-
-              <Bar
-                dataKey="value"
-                name="Value"
-                fill="#14b8a6"
-                radius={[
-                  6,
-                  6,
-                  0,
-                  0,
-                ]}
-              >
-
-                <LabelList
-                  content={
-                    <ValueLabel />
-                  }
-                />
-
-              </Bar>
-
-            </BarChart>
-
-          </ResponsiveContainer>
-
-        </div>
-
-      </ChartCard>
-
-
-      {/* =====================================================
+      {/* ===================================================
           SERVICES
-      ===================================================== */}
+      =================================================== */}
 
       <ChartCard
         title="Win by Services Required"
         subtitle="
-          Capability/service mix among won opportunities
+          Service/capability mix among won opportunities
         "
       >
 
         <div
-          className="h-[450px]"
+          className="
+            h-[460px]
+          "
         >
 
           <ResponsiveContainer
@@ -2846,7 +3107,6 @@ export default function WonAnalysis({
 
               <Legend />
 
-
               <Bar
                 dataKey="count"
                 name="Count"
@@ -2866,7 +3126,6 @@ export default function WonAnalysis({
                 />
 
               </Bar>
-
 
               <Bar
                 dataKey="value"
@@ -2897,9 +3156,9 @@ export default function WonAnalysis({
       </ChartCard>
 
 
-      {/* =====================================================
-          REGISTER
-      ===================================================== */}
+      {/* ===================================================
+          WON REGISTER
+      =================================================== */}
 
       <ChartCard
         title="Won Opportunities Register"
@@ -2953,7 +3212,7 @@ export default function WonAnalysis({
           <table
             className="
               w-full
-              min-w-[1150px]
+              min-w-[1200px]
               text-sm
             "
           >
@@ -2980,7 +3239,7 @@ export default function WonAnalysis({
                   "PCS Vertical",
                   "Industry",
                   "Region",
-                  "Win Year",
+                  "Won Year",
                   "Win Reason",
                   "Deal Size",
                   "Value",
@@ -2988,7 +3247,9 @@ export default function WonAnalysis({
                   (header) => (
 
                     <th
-                      key={header}
+                      key={
+                        header
+                      }
                       className="
                         px-4
                         py-3
@@ -3011,7 +3272,10 @@ export default function WonAnalysis({
             <tbody>
 
               {filtered.map(
-                (row, index) => (
+                (
+                  row,
+                  index
+                ) => (
 
                   <tr
                     key={
@@ -3040,8 +3304,7 @@ export default function WonAnalysis({
                         row?.[
                           "Opportunity Name"
                         ]
-                      ) ||
-                        "—"}
+                      ) || "—"}
                     </td>
 
 
@@ -3056,8 +3319,7 @@ export default function WonAnalysis({
                         row?.[
                           "Customer name"
                         ]
-                      ) ||
-                        "—"}
+                      ) || "—"}
                     </td>
 
 
@@ -3078,8 +3340,7 @@ export default function WonAnalysis({
                       className="
                         px-4
                         py-3
-                        font-medium
-                        text-slate-700
+                        text-slate-600
                       "
                     >
                       {getPCSVertical(
@@ -3163,7 +3424,9 @@ export default function WonAnalysis({
                       "
                     >
                       {formatCr(
-                        getValue(row)
+                        getValue(
+                          row
+                        )
                       )}
                     </td>
 
