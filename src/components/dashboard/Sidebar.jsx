@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   BriefcaseBusiness,
+  Trophy,
   Users,
   Activity,
   GitCompareArrows,
@@ -24,6 +25,12 @@ const navigation = [
     id: "opportunities",
     label: "Opportunities",
     icon: BriefcaseBusiness,
+  },
+
+  {
+    id: "won-analysis",
+    label: "Won Analysis",
+    icon: Trophy,
   },
 
   {
@@ -257,7 +264,9 @@ function Sidebar({
 
         <button
           title="Settings"
-          onClick={() => onNavigate("settings")}
+          onClick={() =>
+            onNavigate("settings")
+          }
 
           className={`
             w-12
@@ -269,14 +278,15 @@ function Sidebar({
             transition
             ${
               activePage === "settings"
-               ? "bg-indigo-50 text-indigo-600 shadow-sm"
-               : "text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                : "text-slate-400 hover:bg-slate-50 hover:text-slate-700"
             }
-          `}  
+          `}
         >
 
           <Settings
-            size={21} />
+            size={21}
+          />
 
         </button>
 

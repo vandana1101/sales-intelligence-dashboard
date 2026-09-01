@@ -11,6 +11,7 @@ export function processWorkbook(
     opportunities: [],
     leads: [],
     activities: [],
+    wonAnalysis: [],
     unknown: [],
   };
 
@@ -38,6 +39,34 @@ export function processWorkbook(
 
     result.opportunityReferenceDate =
       processed.referenceDate;
+  }
+
+
+  // ------------------------------------------
+  // WON ANALYSIS
+  //
+  // Preserve the Excel Won Analysis sheet
+  // separately.
+  //
+  // The actual dashboard analysis can still
+  // be calculated dynamically from
+  // result.opportunities.
+  // ------------------------------------------
+
+  if (
+    classifiedWorkbook.wonAnalysis
+  ) {
+
+    result.wonAnalysis =
+      classifiedWorkbook
+        .wonAnalysis
+        .rows;
+
+    result.wonAnalysisSheetName =
+      classifiedWorkbook
+        .wonAnalysis
+        .sheetName;
+
   }
 
 

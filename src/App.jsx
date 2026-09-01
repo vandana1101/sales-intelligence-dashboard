@@ -7,6 +7,7 @@ import Sidebar from "./components/dashboard/Sidebar";
 
 import Overview from "./pages/Overview";
 import Opportunities from "./pages/Opportunities";
+import WonAnalysis from "./pages/WonAnalysis";
 import Leads from "./pages/Leads";
 import Activities from "./pages/Activities";
 import Insights from "./pages/Insights";
@@ -294,6 +295,9 @@ function App() {
     Opportunities:
       "opportunities",
 
+    "Won Analysis":
+      "won-analysis",
+
     Leads:
       "leads",
 
@@ -532,6 +536,18 @@ function App() {
         return (
 
           <Opportunities
+            data={data}
+            settings={settings}
+          />
+
+        );
+
+
+      case "won-analysis":
+
+        return (
+
+          <WonAnalysis
             data={data}
             settings={settings}
           />
