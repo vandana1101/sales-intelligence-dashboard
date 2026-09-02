@@ -10,16 +10,64 @@ export default function UploadCenter({
   setFiles,
   onBuild,
 }) {
-  function handleFiles(event) {
+  async function handleFiles(event) {
     const selectedFiles = Array.from(
       event.target.files || []
     );
 
-    setFiles((previous) => [
-      ...previous,
-      ...selectedFiles,
-    ]);
+    if (!selectedFiles.length) {
+      return;
+    }
 
+    try {
+      /*
+       * IMPORTANT:
+       * Read the selected files immediately.
+       *
+       * This creates an in-memory copy of each file so that
+       * the dashboard does not depend on the original browser
+       * file reference remaining readable until Build is clicked.
+       *
+       * This is especially important for CSV files and files
+       * selected from synced/network locations.
+       */
+      const stableFiles = await Promise.all(
+        selectedFiles.map(async (file) => {
+          const buffer = await file.arrayBuffer();
+
+          return new File(
+            [buffer],
+            file.name,
+            {
+              type:
+                file.type ||
+                "application/octet-stream",
+              lastModified:
+                file.lastModified,
+            }
+          );
+        })
+      );
+
+      setFiles((previous) => [
+        ...previous,
+        ...stableFiles,
+      ]);
+    } catch (error) {
+      console.error(
+        "Could not read selected file(s):",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "One or more selected files could not be read. Please try selecting the file again."
+      );
+    }
+
+    /*
+     * Allow the user to select the same file again.
+     */
     event.target.value = "";
   }
 
