@@ -99,163 +99,263 @@ function dateValue(v) {
 }
 
 
-function getCreatedDate(row) {
-  return dateValue(
-    first(row, ["Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate"])
-  );
-}
-
-
-function getWonDate(row) {
-  return (
-    first(row, ["Date won", "Date Won", "Date_won", "DateWon"]) ||
-    first(row, ["Won Date", "Won_Date", "WonDate"]) ||
-    first(row, ["Onboarded date", "Onboarded Date", "Onboarded_date", "OnboardedDate"])
-  );
-}
-
-
-function getWonYear(row) {
-  const d = dateValue(getWonDate(row));
-
-  if (d) {
-    return String(d.getFullYear());
+function getDerivedRow(row) {
+  if (!row || typeof row !== "object") {
+    return {
+      createdDate: null,
+      wonDate: "",
+      wonYear: "Unknown",
+      opportunityWeek: "Unknown",
+      opportunityMonth: "Unknown",
+      fiscalQuarter: "Unknown",
+      value: 0,
+      owner: "Unknown",
+      pcsVertical: "Unknown",
+      service: "Unknown",
+      rawWinReason: "",
+      standardizedRegion: "Unknown",
+      winReason: "Unknown",
+      dealSize: "Unknown",
+    };
   }
 
-  const created = getCreatedDate(row);
+  const cached = wonDerivedCache.get(row);
 
-  return created
-    ? String(created.getFullYear())
-    : "Unknown";
-}
-
-
-function getOpportunityWeek(row) {
-  const d = getCreatedDate(row);
-
-  if (!d) {
-    return "Unknown";
+  if (cached) {
+    return cached;
   }
 
-  const start = new Date(
-    d.getFullYear(),
-    0,
-    1
+  const createdDate = dateValue(
+    first(row, [
+      "Opportunity Created Date",
+      "Opportunity_Created_Date",
+      "OpportunityCreatedDate",
+    ])
   );
 
-  const diff = Math.floor(
-    (
-      d.getTime() -
-      start.getTime()
-    ) / 86400000
-  );
+  const wonDate =
+    first(
+      row,
+      ["Date won", "Date Won", "Date_won", "DateWon"],
+      ""
+    ) ||
+    first(
+      row,
+      ["Won Date", "Won_Date", "WonDate"],
+      ""
+    ) ||
+    first(
+      row,
+      [
+        "Onboarded date",
+        "Onboarded Date",
+        "Onboarded_date",
+        "OnboardedDate",
+      ],
+      ""
+    );
 
-  const week =
-    Math.floor(diff / 7) + 1;
+  const wonDateObject = dateValue(wonDate);
 
-  return `Week ${week} ${d.getFullYear()}`;
-}
+  const wonYear = wonDateObject
+    ? String(wonDateObject.getFullYear())
+    : createdDate
+      ? String(createdDate.getFullYear())
+      : "Unknown";
 
+  let opportunityWeek = "Unknown";
+  let opportunityMonth = "Unknown";
+  let fiscalQuarter = "Unknown";
 
-function getOpportunityMonth(row) {
-  const d = getCreatedDate(row);
+  if (createdDate) {
+    const start = new Date(
+      createdDate.getFullYear(),
+      0,
+      1
+    );
 
-  if (!d) {
-    return "Unknown";
-  }
+    const diff = Math.floor(
+      (
+        createdDate.getTime() -
+        start.getTime()
+      ) / 86400000
+    );
 
-  return d.toLocaleString(
-    "en-US",
-    {
-      month: "short",
-      year: "numeric",
+    const week =
+      Math.floor(diff / 7) + 1;
+
+    opportunityWeek =
+      `Week ${week} ${createdDate.getFullYear()}`;
+
+    opportunityMonth =
+      createdDate.toLocaleString(
+        "en-US",
+        {
+          month: "short",
+          year: "numeric",
+        }
+      );
+
+    const month = createdDate.getMonth() + 1;
+
+    let quarter;
+
+    if (month >= 4 && month <= 6) {
+      quarter = "Q1";
+    } else if (month >= 7 && month <= 9) {
+      quarter = "Q2";
+    } else if (month >= 10 && month <= 12) {
+      quarter = "Q3";
+    } else {
+      quarter = "Q4";
     }
-  );
-}
 
-
-/*
- * Fiscal year:
- *
- * Q1 = Apr-Jun
- * Q2 = Jul-Sep
- * Q3 = Oct-Dec
- * Q4 = Jan-Mar
- */
-function getFiscalQuarter(row) {
-  const d = getCreatedDate(row);
-
-  if (!d) {
-    return "Unknown";
+    fiscalQuarter =
+      `${quarter} ${createdDate.getFullYear()}`;
   }
 
-  const month = d.getMonth() + 1;
-
-  let quarter;
-
-  if (month >= 4 && month <= 6) {
-    quarter = "Q1";
-  } else if (month >= 7 && month <= 9) {
-    quarter = "Q2";
-  } else if (month >= 10 && month <= 12) {
-    quarter = "Q3";
-  } else {
-    quarter = "Q4";
-  }
-
-  return `${quarter} ${d.getFullYear()}`;
-}
-
-
-/* =========================================================
-   VALUE
-========================================================= */
-
-/*
- * Value is always converted into Crores.
- *
- * Priority:
- *
- * 1. Values in Cr
- * 2. Value of Contract Per Annum INR / 10^7
- * 3. Revenue potential per month × 12 / 10^7
- */
-function getValue(row) {
   const valuesCr = num(
-    first(row, ["Values in Cr", "Values_in_Cr", "ValuesInCr"], "")
+    first(
+      row,
+      ["Values in Cr", "Values_in_Cr", "ValuesInCr"],
+      ""
+    )
   );
+
+  let value = 0;
 
   if (valuesCr) {
-    return valuesCr;
-  }
-
-  const annual = num(
-    row?.[
-      "Value of Contract Per Annum INR"
-    ]
-  );
-
-  if (annual) {
-    return annual / 10000000;
-  }
-
-  const monthly = num(
-    row?.[
-      "Revenue potential per month (in INR)"
-    ]
-  );
-
-  if (monthly) {
-    return (
-      monthly *
-      12 /
-      10000000
+    value = valuesCr;
+  } else {
+    const annual = num(
+      row?.[
+        "Value of Contract Per Annum INR"
+      ]
     );
+
+    if (annual) {
+      value = annual / 10000000;
+    } else {
+      const monthly = num(
+        row?.[
+          "Revenue potential per month (in INR)"
+        ]
+      );
+
+      if (monthly) {
+        value =
+          monthly * 12 / 10000000;
+      }
+    }
   }
 
-  return 0;
+  const owner = first(
+    row,
+    [
+      "Assigned To",
+      "Salesforce User Name",
+      "Sales Owner",
+    ]
+  );
+
+  const pcsVertical = first(
+    row,
+    [
+      "PCS Vertical",
+      "PCS vertical",
+      "PCS_Vertical",
+      "PCS Vertical ",
+    ]
+  );
+
+  const service = first(
+    row,
+    [
+      "Services Required",
+      "Services required",
+      "services required",
+      "Services",
+      "services",
+      "Capability Required",
+      "Capability required",
+    ]
+  );
+
+  const rawWinReason = first(
+    row,
+    [
+      "Reason for Changing Incumbent",
+      "Reason for changing incumbent",
+      "Reason for changing incumbent ",
+    ],
+    ""
+  );
+
+  const standardizedRegion =
+    getStandardizedRegionUncached(row);
+
+  const winReason =
+    standardizeWinReasonUncached(rawWinReason);
+
+  const band =
+    DEAL_SIZE_BANDS.find(
+      (item) =>
+        value >= item.min &&
+        value < item.max
+    );
+
+  const dealSize =
+    band?.name || "Unknown";
+
+  const derived = {
+    createdDate,
+    wonDate,
+    wonYear,
+    opportunityWeek,
+    opportunityMonth,
+    fiscalQuarter,
+    value,
+    owner,
+    pcsVertical,
+    service,
+    rawWinReason,
+    standardizedRegion,
+    winReason,
+    dealSize,
+  };
+
+  wonDerivedCache.set(row, derived);
+
+  return derived;
 }
 
+function getCreatedDate(row) {
+  return getDerivedRow(row).createdDate;
+}
+
+function getWonDate(row) {
+  return getDerivedRow(row).wonDate;
+}
+
+function getWonYear(row) {
+  return getDerivedRow(row).wonYear;
+}
+
+function getOpportunityWeek(row) {
+  return getDerivedRow(row).opportunityWeek;
+}
+
+function getOpportunityMonth(row) {
+  return getDerivedRow(row).opportunityMonth;
+}
+
+function getFiscalQuarter(row) {
+  return getDerivedRow(row).fiscalQuarter;
+}
+
+function getValue(row) {
+  return getDerivedRow(row).value;
+}
 
 function formatCr(v) {
   return `₹${num(v).toFixed(2)} Cr`;
@@ -288,21 +388,59 @@ function normalizeHeaderKey(value) {
     .replace(/[\s_\-\u2013\u2014]+/g, "");
 }
 
+/*
+ * PERFORMANCE:
+ * Normalize each row's headers once. Won Analysis calls the same
+ * fields repeatedly across filters, KPIs, charts and the register.
+ */
+const wonRowColumnCache = new WeakMap();
+const wonDerivedCache = new WeakMap();
+
+function getNormalizedRowColumns(row) {
+  if (!row || typeof row !== "object") {
+    return new Map();
+  }
+
+  const cached = wonRowColumnCache.get(row);
+
+  if (cached) {
+    return cached;
+  }
+
+  const columns = new Map();
+
+  Object.keys(row).forEach((key) => {
+    columns.set(normalizeHeaderKey(key), key);
+  });
+
+  wonRowColumnCache.set(row, columns);
+
+  return columns;
+}
+
 function first(
   row,
   keys,
   fallback = "Unknown"
 ) {
+  if (!row || typeof row !== "object") {
+    return fallback;
+  }
+
   for (const key of keys) {
     const value = text(row?.[key]);
     if (value) return value;
   }
 
-  const normalizedKeys = keys.map(normalizeHeaderKey);
-  for (const rowKey of Object.keys(row || {})) {
-    if (!normalizedKeys.includes(normalizeHeaderKey(rowKey))) continue;
-    const value = text(row?.[rowKey]);
-    if (value) return value;
+  const columns = getNormalizedRowColumns(row);
+
+  for (const key of keys) {
+    const actualKey = columns.get(normalizeHeaderKey(key));
+
+    if (actualKey !== undefined) {
+      const value = text(row?.[actualKey]);
+      if (value) return value;
+    }
   }
 
   return fallback;
@@ -314,70 +452,20 @@ function first(
 ========================================================= */
 
 function getOwner(row) {
-  return first(
-    row,
-    [
-      "Assigned To",
-      "Salesforce User Name",
-      "Sales Owner",
-    ]
-  );
+  return getDerivedRow(row).owner;
 }
 
-
-/*
- * IMPORTANT:
- * PCS Vertical comes directly from the
- * PCS Vertical column in the Opportunities data.
- */
 function getPCSVertical(row) {
-  // Read directly from the Opportunities dataset's PCS Vertical field.
-  // Header normalization handles Excel whitespace/BOM/case variations.
-  return first(
-    row,
-    [
-      "PCS Vertical",
-      "PCS vertical",
-      "PCS_Vertical",
-      "PCS Vertical ",
-    ]
-  );
+  return getDerivedRow(row).pcsVertical;
 }
 
-
-/*
- * Services come directly from Services Required.
- * Capability Required is retained only as a
- * fallback for older datasets.
- */
 function getService(row) {
-  return first(
-    row,
-    [
-      "Services Required",
-      "Services required",
-      "services required",
-      "Services",
-      "services",
-      "Capability Required",
-      "Capability required",
-    ]
-  );
+  return getDerivedRow(row).service;
 }
-
 
 function getRawWinReason(row) {
-  return first(
-    row,
-    [
-      "Reason for Changing Incumbent",
-      "Reason for changing incumbent",
-      "Reason for changing incumbent ",
-    ],
-    ""
-  );
+  return getDerivedRow(row).rawWinReason;
 }
-
 
 /* =========================================================
    DEAL SIZE BANDS
@@ -418,15 +506,15 @@ const DEAL_SIZE_BANDS = [
 
 
 function getDealSize(row) {
-  const value = getValue(row);
+  return getDerivedRow(row).dealSize;
+}
 
-  const band = DEAL_SIZE_BANDS.find(
-    (item) =>
-      value >= item.min &&
-      value < item.max
-  );
+function getStandardizedRegion(row) {
+  return getDerivedRow(row).standardizedRegion;
+}
 
-  return band?.name || "Unknown";
+function standardizeWinReason(row) {
+  return getDerivedRow(row).winReason;
 }
 
 
@@ -434,7 +522,7 @@ function getDealSize(row) {
    REGION STANDARDIZATION
 ========================================================= */
 
-function getStandardizedRegion(row) {
+function getStandardizedRegionUncached(row) {
   const raw = first(
     row,
     [
@@ -566,8 +654,7 @@ function getStandardizedRegion(row) {
    WIN REASON STANDARDIZATION
 ========================================================= */
 
-function standardizeWinReason(row) {
-  const raw = getRawWinReason(row);
+function standardizeWinReasonUncached(raw) {
 
   if (!raw) {
     return "Unknown";
@@ -1607,25 +1694,132 @@ export default function WonAnalysis({
 
 
   /* =======================================================
-     KPIs
+     ANALYTICS
   ======================================================= */
 
-  const metrics = useMemo(() => {
+  const analytics = useMemo(() => {
+    const values = [];
+    const reasonMap = new Map();
+    const pcsMap = new Map();
+    const serviceMap = new Map();
+    const yearlyMap = new Map();
 
-    const values =
-      filtered
-        .map(getValue)
-        .sort(
-          (a, b) => a - b
-        );
+    const dealSizeMap = new Map(
+      DEAL_SIZE_BANDS.map((band) => [
+        band.name,
+        {
+          name: band.name,
+          count: 0,
+          value: 0,
+        },
+      ])
+    );
 
+    const regionMap = new Map(
+      [
+        "North",
+        "South",
+        "East",
+        "West",
+        "Pan India",
+        "Multiple Locations",
+      ].map((name) => [
+        name,
+        {
+          name,
+          count: 0,
+          value: 0,
+        },
+      ])
+    );
 
-    const total =
-      values.reduce(
-        (a, b) => a + b,
-        0
+    let total = 0;
+
+    function addAggregate(map, key, value) {
+      const safeKey = key || "Unknown";
+
+      if (!map.has(safeKey)) {
+        map.set(safeKey, {
+          name: safeKey,
+          count: 0,
+          value: 0,
+        });
+      }
+
+      const item = map.get(safeKey);
+
+      item.count += 1;
+      item.value += value;
+    }
+
+    filtered.forEach((row) => {
+      const derived = getDerivedRow(row);
+      const value = derived.value;
+
+      values.push(value);
+      total += value;
+
+      addAggregate(
+        reasonMap,
+        derived.winReason,
+        value
       );
 
+      addAggregate(
+        pcsMap,
+        derived.pcsVertical,
+        value
+      );
+
+      addAggregate(
+        serviceMap,
+        derived.service,
+        value
+      );
+
+      if (regionMap.has(derived.standardizedRegion)) {
+        const item =
+          regionMap.get(
+            derived.standardizedRegion
+          );
+
+        item.count += 1;
+        item.value += value;
+      }
+
+      const dealBand =
+        dealSizeMap.get(
+          derived.dealSize
+        );
+
+      if (dealBand) {
+        dealBand.count += 1;
+        dealBand.value += value;
+      }
+
+      if (derived.wonYear !== "Unknown") {
+        if (!yearlyMap.has(derived.wonYear)) {
+          yearlyMap.set(
+            derived.wonYear,
+            {
+              year: derived.wonYear,
+              count: 0,
+              value: 0,
+            }
+          );
+        }
+
+        const item =
+          yearlyMap.get(
+            derived.wonYear
+          );
+
+        item.count += 1;
+        item.value += value;
+      }
+    });
+
+    values.sort((a, b) => a - b);
 
     const median =
       values.length === 0
@@ -1643,262 +1837,86 @@ export default function WonAnalysis({
               ]
             ) / 2;
 
+    const reasonData = [
+      ...reasonMap.values(),
+    ].sort(
+      (a, b) => b.value - a.value
+    );
 
-    const reasons =
-      aggregate(
-        filtered,
-        standardizeWinReason
-      ).sort(
-        (a, b) =>
-          b.count - a.count
-      );
+    const pcsData = [
+      ...pcsMap.values(),
+    ].sort(
+      (a, b) => b.value - a.value
+    );
 
+    const serviceData = [
+      ...serviceMap.values(),
+    ].sort(
+      (a, b) => b.value - a.value
+    );
+
+    const yearly = [
+      ...yearlyMap.values(),
+    ].sort(
+      (a, b) =>
+        Number(a.year) -
+        Number(b.year)
+    );
+
+    const topReason =
+      reasonData[0]?.name || "—";
 
     return {
-
-      count:
-        filtered.length,
-
-      total,
-
-      average:
-        filtered.length
-          ? total /
-            filtered.length
-          : 0,
-
-      highest:
-        values[
-          values.length - 1
-        ] || 0,
-
-      median,
-
-      topReason:
-        reasons[0]?.name ||
-        "—",
-
-      topReasonShare:
-        filtered.length
-          ? (
-              reasons[0]?.count ||
-              0
-            ) /
-            filtered.length
-          : 0,
-
-      years:
-        new Set(
-          filtered.map(
-            getWonYear
-          )
+      metrics: {
+        count: filtered.length,
+        total,
+        average:
+          filtered.length
+            ? total / filtered.length
+            : 0,
+        highest:
+          values[
+            values.length - 1
+          ] || 0,
+        median,
+        topReason,
+        topReasonShare:
+          filtered.length
+            ? (
+                reasonData[0]?.count ||
+                0
+              ) / filtered.length
+            : 0,
+        years: new Set(
+          filtered.map(getWonYear)
         ).size,
+      },
 
+      dealSizeData: [
+        ...dealSizeMap.values(),
+      ],
+
+      reasonData,
+      pcsData,
+
+      regionData: [
+        ...regionMap.values(),
+      ],
+
+      serviceData,
+      yearly,
     };
-
   }, [filtered]);
 
-
-  /* =======================================================
-     WIN BY DEAL SIZE
-  ======================================================= */
-
-  const dealSizeData = useMemo(() => {
-
-    return DEAL_SIZE_BANDS.map(
-      (band) => {
-
-        const matching =
-          filtered.filter(
-            (row) =>
-              getValue(row) >=
-                band.min &&
-              getValue(row) <
-                band.max
-          );
-
-
-        return {
-
-          name:
-            band.name,
-
-          count:
-            matching.length,
-
-          value:
-            matching.reduce(
-              (
-                total,
-                row
-              ) =>
-                total +
-                getValue(row),
-              0
-            ),
-
-        };
-      }
-    );
-
-  }, [filtered]);
-
-
-  /* =======================================================
-     OTHER CHART DATA
-  ======================================================= */
-
-  const reasonData =
-    useMemo(
-      () =>
-        aggregate(
-          filtered,
-          standardizeWinReason
-        ).sort(
-          (a, b) =>
-            b.value - a.value
-        ),
-      [filtered]
-    );
-
-
-  const pcsData =
-    useMemo(
-      () =>
-        aggregate(
-          filtered,
-          getPCSVertical
-        ).sort(
-          (a, b) =>
-            b.value - a.value
-        ),
-      [filtered]
-    );
-
-
-  const regionData =
-    useMemo(
-      () =>
-        [
-          "North",
-          "South",
-          "East",
-          "West",
-          "Pan India",
-          "Multiple Locations",
-        ].map(
-          (name) => {
-
-            const matching =
-              filtered.filter(
-                (row) =>
-                  getStandardizedRegion(
-                    row
-                  ) === name
-              );
-
-
-            return {
-
-              name,
-
-              count:
-                matching.length,
-
-              value:
-                matching.reduce(
-                  (
-                    total,
-                    row
-                  ) =>
-                    total +
-                    getValue(row),
-                  0
-                ),
-
-            };
-
-          }
-        ),
-      [filtered]
-    );
-
-
-  const serviceData =
-    useMemo(
-      () =>
-        aggregate(
-          filtered,
-          getService
-        ).sort(
-          (a, b) =>
-            b.value - a.value
-        ),
-      [filtered]
-    );
-
-
-  /* =======================================================
-     YEARLY DATA
-  ======================================================= */
-
-  const yearly =
-    useMemo(() => {
-
-      const map =
-        new Map();
-
-
-      filtered.forEach(
-        (row) => {
-
-          const year =
-            getWonYear(row);
-
-
-          if (!map.has(year)) {
-
-            map.set(
-              year,
-              {
-                year,
-                count: 0,
-                value: 0,
-              }
-            );
-
-          }
-
-
-          const item =
-            map.get(year);
-
-
-          item.count += 1;
-
-          item.value +=
-            getValue(row);
-
-        }
-      );
-
-
-      return [
-        ...map.values(),
-      ]
-        .filter(
-          (x) =>
-            x.year !==
-            "Unknown"
-        )
-        .sort(
-          (a, b) =>
-            Number(a.year) -
-            Number(b.year)
-        );
-
-    }, [filtered]);
-
+  const {
+    metrics,
+    dealSizeData,
+    reasonData,
+    pcsData,
+    regionData,
+    serviceData,
+    yearly,
+  } = analytics;
 
   /* =======================================================
      CHART DATA
