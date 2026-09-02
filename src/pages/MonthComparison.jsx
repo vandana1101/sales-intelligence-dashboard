@@ -93,42 +93,49 @@ function getCurrencySymbol(currency) {
 }
 
 
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\\s+/g, " ");
+}
+
 function getField(
   row,
   names
 ) {
+  if (!row || typeof row !== "object") {
+    return "";
+  }
 
-  for (
-    const name of names
-  ) {
+  const normalizedMap = new Map(
+    Object.entries(row).map(([key, value]) => [
+      normalizeHeader(key),
+      value,
+    ])
+  );
 
-    if (
-      row &&
-      Object.prototype.hasOwnProperty.call(
-        row,
-        name
-      )
-    ) {
+  for (const name of names) {
+    const normalizedName =
+      normalizeHeader(name);
 
+    if (normalizedMap.has(normalizedName)) {
       const value =
-        row[name];
+        normalizedMap.get(normalizedName);
 
       if (
         value !== null &&
         value !== undefined &&
         String(value).trim() !== ""
       ) {
-
         return value;
-
       }
-
     }
-
   }
 
   return "";
-
 }
 
 
@@ -1586,7 +1593,7 @@ function MonthComparison({
 
           <p className="text-sm text-slate-400 mt-2 max-w-lg mx-auto">
 
-            Upload monthly workbooks containing
+            Upload monthly Excel or CSV files containing
             opportunity, lead or activity dates.
             The dashboard will automatically group
             the records by month.

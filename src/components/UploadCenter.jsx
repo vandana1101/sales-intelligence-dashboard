@@ -50,7 +50,7 @@ export default function UploadCenter({
 
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-slate-900">
 
-            Turn your Excel data into
+            Turn your sales data into
 
             <span className="block text-indigo-600 mt-2">
               sales intelligence.
@@ -61,7 +61,7 @@ export default function UploadCenter({
           <p className="text-slate-500 text-lg max-w-2xl mx-auto mt-5 leading-relaxed">
 
             Upload one or multiple monthly
-            workbooks. We'll automatically
+            Excel or CSV files. We'll automatically
             analyse Opportunities, Leads and
             Activities and build your dashboard.
 
@@ -86,7 +86,7 @@ export default function UploadCenter({
 
             <h2 className="text-xl font-bold text-slate-800 mt-6">
 
-              Drop your Excel files here
+              Upload your Excel or CSV files
 
             </h2>
 
@@ -98,13 +98,13 @@ export default function UploadCenter({
 
             <div className="inline-flex mt-6 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold transition">
 
-              Browse Files
+              Upload Files
 
             </div>
 
             <p className="text-xs text-slate-400 mt-4">
 
-              Supports .xlsx and .xls
+              Supports .xlsx, .xls and .csv
 
             </p>
 
@@ -113,7 +113,7 @@ export default function UploadCenter({
           <input
             type="file"
             multiple
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             onChange={handleFiles}
             className="hidden"
           />
@@ -136,7 +136,7 @@ export default function UploadCenter({
 
                 <p className="text-sm text-slate-400 mt-1">
 
-                  {files.length} workbook
+                  {files.length} file
                   {files.length !== 1
                     ? "s"
                     : ""} selected

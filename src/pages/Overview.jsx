@@ -68,26 +68,100 @@ function number(value) {
 }
 
 
+/* =========================================================
+   HEADER NORMALIZATION
+========================================================= */
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
+/* =========================================================
+   FLEXIBLE COLUMN LOOKUP
+========================================================= */
+
+function getColumnValue(
+  row,
+  possibleNames
+) {
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
+
+  const entries = Object.entries(row);
+
+  const targetNames =
+    possibleNames.map(
+      normalizeHeader
+    );
+
+  const match =
+    entries.find(
+      ([key]) =>
+        targetNames.includes(
+          normalizeHeader(key)
+        )
+    );
+
+  return match
+    ? match[1]
+    : undefined;
+}
+
+
+/* =========================================================
+   OPPORTUNITY VALUE
+========================================================= */
+
 function getOpportunityValue(row) {
+
+  /*
+   * Preferred:
+   * Value of Contract Per Annum INR
+   */
 
   const annual =
     number(
-      row[
-        "Value of Contract Per Annum INR"
-      ]
+      getColumnValue(
+        row,
+        [
+          "Value of Contract Per Annum INR",
+          "Value of Contract Per Annum",
+          "Annual Contract Value",
+        ]
+      )
     );
+
 
   if (annual > 0) {
     return annual;
   }
 
 
+  /*
+   * Fallback:
+   * Revenue potential per month × 12
+   */
+
   const monthly =
     number(
-      row[
-        "Revenue potential per month (in INR)"
-      ]
+      getColumnValue(
+        row,
+        [
+          "Revenue potential per month (in INR)",
+          "Revenue Potential Per Month (in INR)",
+          "Revenue Potential Per Month",
+          "Monthly Revenue Potential",
+        ]
+      )
     );
+
 
   return monthly * 12;
 
@@ -98,55 +172,118 @@ function getOpportunityValue(row) {
    SETTINGS-AWARE DISPLAY HELPERS
 ========================================================= */
 
-function getCurrencySymbol(currency = "INR") {
+function getCurrencySymbol(
+  currency = "INR"
+) {
+
   const symbols = {
     INR: "₹",
     USD: "$",
     EUR: "€",
   };
 
-  return symbols[currency] || currency;
+  return (
+    symbols[currency] ||
+    currency
+  );
+
 }
 
 
-function formatValue(value, settings = {}) {
-  const currency = settings?.currency || "INR";
-  const display = settings?.valueDisplay || "Crores";
-  const symbol = getCurrencySymbol(currency);
-  const amount = number(value);
+function formatValue(
+  value,
+  settings = {}
+) {
+
+  const currency =
+    settings?.currency ||
+    "INR";
+
+  const display =
+    settings?.valueDisplay ||
+    "Crores";
+
+  const symbol =
+    getCurrencySymbol(currency);
+
+  const amount =
+    number(value);
+
 
   if (display === "Raw") {
-    return `${symbol}${amount.toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`;
+
+    return `${symbol}${amount.toLocaleString(
+      "en-IN",
+      {
+        maximumFractionDigits: 0,
+      }
+    )}`;
+
   }
+
 
   if (display === "Lakhs") {
-    return `${symbol}${(amount / 100000).toFixed(2)} L`;
+
+    return `${symbol}${(
+      amount / 100000
+    ).toFixed(2)} L`;
+
   }
 
-  return `${symbol}${(amount / 10000000).toFixed(2)} Cr`;
+
+  return `${symbol}${(
+    amount / 10000000
+  ).toFixed(2)} Cr`;
+
 }
 
 
-function getValueAxisFormatter(settings = {}) {
-  const currency = settings?.currency || "INR";
-  const display = settings?.valueDisplay || "Crores";
-  const symbol = getCurrencySymbol(currency);
+function getValueAxisFormatter(
+  settings = {}
+) {
+
+  const currency =
+    settings?.currency ||
+    "INR";
+
+  const display =
+    settings?.valueDisplay ||
+    "Crores";
+
+  const symbol =
+    getCurrencySymbol(currency);
+
 
   return (value) => {
-    const amount = number(value);
+
+    const amount =
+      number(value);
+
 
     if (display === "Raw") {
-      return `${symbol}${(amount / 1000000).toFixed(1)}M`;
+
+      return `${symbol}${(
+        amount / 1000000
+      ).toFixed(1)}M`;
+
     }
+
 
     if (display === "Lakhs") {
-      return `${symbol}${(amount / 100000).toFixed(1)}L`;
+
+      return `${symbol}${(
+        amount / 100000
+      ).toFixed(1)}L`;
+
     }
 
-    return `${symbol}${(amount / 10000000).toFixed(1)}Cr`;
+
+    return `${symbol}${(
+      amount / 10000000
+    ).toFixed(1)}Cr`;
+
   };
+
 }
 
 
@@ -160,13 +297,11 @@ function Overview({
 }) {
 
   /*
-   * IMPORTANT:
-   *
    * Opportunities.jsx uses currentOpportunities.
-   * We use the exact same source here.
    *
-   * The fallbacks make the page more tolerant if the
-   * processor exposes the dataset under another name.
+   * Keep the same source here so Overview reflects the
+   * same processed dataset regardless of whether the
+   * original source was XLSX, XLS or CSV.
    */
 
   const opportunities =
@@ -207,10 +342,18 @@ function Overview({
 
         const outcome =
           text(
-            row[
-              "Outcome bucket"
-            ]
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
           ).toLowerCase();
+
 
         return (
           outcome.includes("won") &&
@@ -227,10 +370,18 @@ function Overview({
 
         const outcome =
           text(
-            row[
-              "Outcome bucket"
-            ]
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
           ).toLowerCase();
+
 
         return outcome.includes(
           "active"
@@ -241,13 +392,22 @@ function Overview({
 
 
   const agingCritical =
-    Number(settings?.opportunityRisk?.ageCritical) || 90;
+    Number(
+      settings?.opportunityRisk?.ageCritical
+    ) || 90;
+
 
   const agingRisk =
     opportunities.filter(
       (row) =>
         number(
-          row["Age"]
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
         ) > agingCritical
     ).length;
 
@@ -264,12 +424,15 @@ function Overview({
 
       const month =
         text(
-          row[
-            "Opportunity Month (G)"
-          ]
-        ) ||
-        text(
-          row["Opportunity Month"]
+          getColumnValue(
+            row,
+            [
+              "Opportunity Month (G)",
+              "Opportunity Month",
+              "Opportunity_Month",
+              "Opportunity-Month",
+            ]
+          )
         ) ||
         "Unknown";
 
@@ -318,9 +481,16 @@ function Overview({
 
       const outcome =
         text(
-          row[
-            "Outcome bucket"
-          ]
+          getColumnValue(
+            row,
+            [
+              "Outcome bucket",
+              "Outcome Bucket",
+              "Outcome_Bucket",
+              "Outcome-Bucket",
+              "Outcome",
+            ]
+          )
         ) ||
         "Unknown";
 
@@ -373,7 +543,13 @@ function Overview({
 
       const age =
         number(
-          row["Age"]
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
         );
 
 
@@ -633,21 +809,20 @@ function Overview({
                     fontSize: 11,
                     fill: "#94a3b8",
                   }}
-                  tickFormatter={(value) =>
-                    `${(
-                      value /
-                      10000000
-                    ).toFixed(1)}Cr`
+                  tickFormatter={
+                    getValueAxisFormatter(
+                      settings
+                    )
                   }
                 />
 
 
                 <Tooltip
                   formatter={(value) =>
-                    `₹${(
-                      Number(value) /
-                      10000000
-                    ).toFixed(2)} Cr`
+                    formatValue(
+                      value,
+                      settings
+                    )
                   }
                 />
 
@@ -655,7 +830,7 @@ function Overview({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  name="Pipeline Value"
+                  name="Value"
                   stroke="#6366f1"
                   strokeWidth={3}
                   fill="url(#overviewPipelineGradient)"

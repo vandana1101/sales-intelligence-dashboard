@@ -84,25 +84,51 @@ function number(value) {
   when the workbook structure changes.
 */
 
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
 function getField(
   row,
   possibleNames
 ) {
 
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+
+  const normalizedMap = new Map(
+    Object.entries(row).map(
+      ([key, value]) => [
+        normalizeHeader(key),
+        value,
+      ]
+    )
+  );
+
   for (
     const name of possibleNames
   ) {
 
+    const normalizedName =
+      normalizeHeader(name);
+
     if (
-      row &&
-      Object.prototype.hasOwnProperty.call(
-        row,
-        name
+      normalizedMap.has(
+        normalizedName
       )
     ) {
 
       const value =
-        row[name];
+        normalizedMap.get(
+          normalizedName
+        );
 
       if (
         value !== null &&
@@ -1309,7 +1335,7 @@ function Activities({
 
           <p className="text-sm text-slate-400 mt-2">
 
-            Upload a workbook containing an Activity Data sheet.
+            Upload an Excel or CSV file containing Activity Data.
 
           </p>
 

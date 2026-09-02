@@ -17,6 +17,41 @@ import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
 
 
+
+/* =========================================================
+   HEADER-NORMALIZED COLUMN ACCESS
+   Keeps Insights compatible with Excel and CSV headers such as
+   "Opportunity_ID", "OpportunityID", "Assigned_To", etc.
+========================================================= */
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\\s+/g, " ");
+}
+
+function getColumnValue(row, possibleNames = []) {
+  if (!row || typeof row !== "object") return "";
+
+  const normalizedMap = new Map(
+    Object.entries(row).map(([key, value]) => [normalizeHeader(key), value])
+  );
+
+  for (const name of possibleNames) {
+    const normalizedName = normalizeHeader(name);
+    if (normalizedMap.has(normalizedName)) return normalizedMap.get(normalizedName);
+  }
+
+  return "";
+}
+
+function column(row, ...names) {
+  return getColumnValue(row, names);
+}
+
 /* =========================================================
    HELPERS
    (same conventions as Opportunities.jsx / Activities.jsx
@@ -49,13 +84,13 @@ function number(value) {
 
 
 function getOpportunityValue(row) {
-  const annual = number(row["Value of Contract Per Annum INR"]);
+  const annual = number(column(row, "Value of Contract Per Annum INR"));
 
   if (annual > 0) {
     return annual;
   }
 
-  const monthly = number(row["Revenue potential per month (in INR)"]);
+  const monthly = number(column(row, "Revenue potential per month (in INR)"));
 
   if (monthly > 0) {
     return monthly * 12;
@@ -66,31 +101,31 @@ function getOpportunityValue(row) {
 
 
 function getAge(row) {
-  return number(row["Age"]);
+  return number(column(row, "Age"));
 }
 
 
 function getOutcome(row) {
-  return text(row["Outcome bucket"]) || "Unknown";
+  return text(column(row, "Outcome bucket", "Outcome Bucket")) || "Unknown";
 }
 
 
 function getOwner(row) {
-  return text(row["Assigned To"]) || "Unassigned";
+  return text(column(row, "Assigned To")) || "Unassigned";
 }
 
 
 function getIndustry(row) {
-  return text(row["Industry"]) || "Unknown";
+  return text(column(row, "Industry")) || "Unknown";
 }
 
 
 function getRelatedTo(row) {
   return (
-    text(row["Opportunity Name"]) ||
-    text(row["Opportunity"]) ||
-    text(row["Lead Name"]) ||
-    text(row["Customer name"]) ||
+    text(column(row, "Opportunity Name")) ||
+    text(column(row, "Opportunity")) ||
+    text(column(row, "Lead Name")) ||
+    text(column(row, "Customer name", "Customer Name")) ||
     ""
   );
 }
@@ -282,7 +317,7 @@ function Insights({ data, settings }) {
         severity: topShare >= sensitivity.shareThreshold * 1.5 ? "critical" : "warning",
         icon: AlertTriangle,
         title: "Pipeline concentration risk",
-        description: `${text(topOpp["Opportunity Name"]) || "One opportunity"} accounts for ${(topShare * 100).toFixed(0)}% of active pipeline value (${formatValue(getOpportunityValue(topOpp), currency, valueDisplay)}). Losing it would materially impact forecast.`,
+        description: `${text(column(topOpp, "Opportunity Name")) || "One opportunity"} accounts for ${(topShare * 100).toFixed(0)}% of active pipeline value (${formatValue(getOpportunityValue(topOpp), currency, valueDisplay)}). Losing it would materially impact forecast.`,
       });
     }
 
@@ -356,7 +391,7 @@ function Insights({ data, settings }) {
     const monthMap = {};
 
     opportunities.forEach((row) => {
-      const month = text(row["Opportunity Month (G)"]) || "Unknown";
+      const month = text(column(row, "Opportunity Month (G)", "Opportunity Month")) || "Unknown";
 
       if (!monthMap[month]) {
         monthMap[month] = { count: 0, value: 0 };
@@ -546,7 +581,7 @@ function Insights({ data, settings }) {
 
     return activeOpps
       .map((row) => {
-        const name = text(row["Opportunity Name"]);
+        const name = text(column(row, "Opportunity Name"));
         const count = activityCountByRecord[name] || 0;
 
         return { row, name, count };
@@ -637,7 +672,7 @@ function Insights({ data, settings }) {
           </h2>
 
           <p className="text-slate-400 mt-2">
-            Upload opportunity and activity data to generate intelligence signals.
+            Upload opportunity and activity data from Excel or CSV files to generate intelligence signals.
           </p>
         </div>
       </div>
@@ -773,7 +808,7 @@ function Insights({ data, settings }) {
                 <tbody>
                   {lowEngagementOpportunities.map((item, index) => (
                     <tr
-                      key={item.row["Opportunity ID"] || index}
+                      key={column(item.row, "Opportunity ID") || index}
                       className="border-b border-slate-50 hover:bg-slate-50 transition"
                     >
                       <td className="py-4 pr-4 font-semibold text-slate-800">
@@ -786,7 +821,7 @@ function Insights({ data, settings }) {
 
                       <td className="py-4 px-4">
                         <span className="inline-flex px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
-                          {text(item.row["Opportunity Stage"]) || "Unknown"}
+                          {text(column(item.row, "Opportunity Stage")) || "Unknown"}
                         </span>
                       </td>
 

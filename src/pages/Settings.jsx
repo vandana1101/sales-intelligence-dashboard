@@ -981,7 +981,7 @@ function SettingsPage({ data, settings, setSettings, resetSettings }) {
               </h2>
 
               <p className="text-sm text-slate-400 mt-1">
-                Manage the currently loaded workbook data.
+                Manage the currently loaded sales data.
               </p>
 
             </div>

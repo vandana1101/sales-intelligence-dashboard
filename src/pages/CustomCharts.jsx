@@ -37,12 +37,41 @@ import SectionHeader from "../components/dashboard/SectionHeader";
    HELPERS
 ========================================================= */
 
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
 function getField(row, key) {
   if (!row || !key) {
     return "";
   }
 
-  return row[key];
+  // CSV files can contain equivalent headers with
+  // underscores, hyphens, different spacing, casing,
+  // or a UTF-8 BOM. Resolve those variations while
+  // preserving the original column names in the UI.
+  const normalizedKey =
+    normalizeHeader(key);
+
+  const entries =
+    Object.entries(row);
+
+  for (const [header, value] of entries) {
+    if (
+      normalizeHeader(header) ===
+      normalizedKey
+    ) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 

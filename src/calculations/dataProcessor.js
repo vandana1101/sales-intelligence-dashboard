@@ -16,12 +16,33 @@ export function processWorkbook(
   };
 
 
+  /*
+   * Protect against an empty or invalid
+   * classified workbook.
+   *
+   * This is useful when processing CSV files
+   * because every uploaded CSV becomes a
+   * normalized workbook-like object.
+   */
+  if (
+    !classifiedWorkbook ||
+    typeof classifiedWorkbook !== "object"
+  ) {
+
+    return result;
+
+  }
+
+
   // ------------------------------------------
   // OPPORTUNITIES
   // ------------------------------------------
 
   if (
-    classifiedWorkbook.opportunities
+    classifiedWorkbook.opportunities &&
+    Array.isArray(
+      classifiedWorkbook.opportunities.rows
+    )
   ) {
 
     const rows =
@@ -29,32 +50,39 @@ export function processWorkbook(
         .opportunities
         .rows;
 
+
     const processed =
       processOpportunities(
         rows
       );
 
+
     result.opportunities =
-      processed.rows;
+      processed?.rows || [];
+
 
     result.opportunityReferenceDate =
-      processed.referenceDate;
+      processed?.referenceDate || null;
+
   }
 
 
   // ------------------------------------------
   // WON ANALYSIS
   //
-  // Preserve the Excel Won Analysis sheet
-  // separately.
+  // Preserve a separately classified
+  // Won Analysis source if one exists.
   //
-  // The actual dashboard analysis can still
-  // be calculated dynamically from
+  // The actual Won Analysis dashboard can
+  // still calculate dynamically from
   // result.opportunities.
   // ------------------------------------------
 
   if (
-    classifiedWorkbook.wonAnalysis
+    classifiedWorkbook.wonAnalysis &&
+    Array.isArray(
+      classifiedWorkbook.wonAnalysis.rows
+    )
   ) {
 
     result.wonAnalysis =
@@ -62,10 +90,11 @@ export function processWorkbook(
         .wonAnalysis
         .rows;
 
+
     result.wonAnalysisSheetName =
       classifiedWorkbook
         .wonAnalysis
-        .sheetName;
+        .sheetName || null;
 
   }
 
@@ -75,13 +104,17 @@ export function processWorkbook(
   // ------------------------------------------
 
   if (
-    classifiedWorkbook.leads
+    classifiedWorkbook.leads &&
+    Array.isArray(
+      classifiedWorkbook.leads.rows
+    )
   ) {
 
     result.leads =
       classifiedWorkbook
         .leads
         .rows;
+
   }
 
 
@@ -90,13 +123,17 @@ export function processWorkbook(
   // ------------------------------------------
 
   if (
-    classifiedWorkbook.activities
+    classifiedWorkbook.activities &&
+    Array.isArray(
+      classifiedWorkbook.activities.rows
+    )
   ) {
 
     result.activities =
       classifiedWorkbook
         .activities
         .rows;
+
   }
 
 
@@ -105,7 +142,11 @@ export function processWorkbook(
   // ------------------------------------------
 
   result.unknown =
-    classifiedWorkbook.unknown || [];
+    Array.isArray(
+      classifiedWorkbook.unknown
+    )
+      ? classifiedWorkbook.unknown
+      : [];
 
 
   return result;

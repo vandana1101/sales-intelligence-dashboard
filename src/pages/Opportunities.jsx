@@ -40,6 +40,43 @@ import SectionHeader from "../components/dashboard/SectionHeader";
 /* =========================================================
    BASIC HELPERS
 ========================================================= */
+/* =========================================================
+   HEADER-NORMALIZED COLUMN ACCESS
+   Keeps the page compatible with Excel and CSV headers such as
+   "Opportunity ID", "Opportunity_ID", "OpportunityID", etc.
+========================================================= */
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function getColumnValue(row, possibleNames = []) {
+  if (!row || typeof row !== "object") return "";
+
+  const entries = Object.entries(row);
+  const normalizedMap = new Map(
+    entries.map(([key, value]) => [normalizeHeader(key), value])
+  );
+
+  for (const name of possibleNames) {
+    const normalizedName = normalizeHeader(name);
+    if (normalizedMap.has(normalizedName)) {
+      return normalizedMap.get(normalizedName);
+    }
+  }
+
+  return "";
+}
+
+function column(row, ...names) {
+  return getColumnValue(row, names);
+}
+
 
 function text(value) {
   if (value === null || value === undefined) return "";
@@ -164,10 +201,10 @@ function getOpportunityValue(row) {
   const croreValue = valueColumn ? number(row[valueColumn]) : 0;
   if (croreValue > 0) return croreValue * 10000000;
 
-  const annual = number(row["Value of Contract Per Annum INR"]);
+  const annual = number(column(row, "Value of Contract Per Annum INR", "Value_of_Contract_Per_Annum_INR", "Value of Contract Per Annum"));
   if (annual > 0) return annual;
 
-  const monthly = number(row["Revenue potential per month (in INR)"]);
+  const monthly = number(column(row, "Revenue potential per month (in INR)", "Revenue_potential_per_month_(in_INR)", "Revenue potential per month"));
   if (monthly > 0) return monthly * 12;
 
   return 0;
@@ -181,10 +218,10 @@ function getOpportunityValueCrores(row) {
   const croreValue = valueColumn ? number(row[valueColumn]) : 0;
   if (croreValue > 0) return croreValue;
 
-  const annual = number(row["Value of Contract Per Annum INR"]);
+  const annual = number(column(row, "Value of Contract Per Annum INR", "Value_of_Contract_Per_Annum_INR", "Value of Contract Per Annum"));
   if (annual > 0) return annual / 10000000;
 
-  const monthly = number(row["Revenue potential per month (in INR)"]);
+  const monthly = number(column(row, "Revenue potential per month (in INR)", "Revenue_potential_per_month_(in_INR)", "Revenue potential per month"));
   if (monthly > 0) return (monthly * 12) / 10000000;
 
   return 0;
@@ -195,17 +232,17 @@ function getOpportunityValueCrores(row) {
 ========================================================= */
 
 function getAge(row) {
-  const age = number(row["Age"]);
+  const age = number(column(row, "Age"));
 
   if (
     age >= 0 &&
-    row["Age"] !== null &&
-    row["Age"] !== ""
+    column(row, "Age") !== null &&
+    column(row, "Age") !== ""
   ) {
     return age;
   }
 
-  const created = row["Opportunity Created Date"];
+  const created = column(row, "Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate", "Created Date");
 
   if (created) {
     const date = new Date(created);
@@ -245,7 +282,7 @@ function getAgeBucket(
 ========================================================= */
 
 function getOutcome(row) {
-  const stage = text(row["Opportunity Stage"]).toLowerCase().replace(/\s+/g, " ").trim();
+  const stage = text(column(row, "Opportunity Stage", "Opportunity_Stage", "OpportunityStage", "Stage")).toLowerCase().replace(/\s+/g, " ").trim();
 
   if (["won", "onboarded", "1st invoice", "agreement", "loi received"].includes(stage)) {
     return "Won";
@@ -256,7 +293,7 @@ function getOutcome(row) {
 }
 
 function getStage(row) {
-  const rawStage = text(row["Opportunity Stage"]);
+  const rawStage = text(column(row, "Opportunity Stage", "Opportunity_Stage", "OpportunityStage", "Stage"));
   if (!rawStage) return "Unknown";
 
   // Canonical presentation labels used everywhere in the dashboard.
@@ -273,16 +310,16 @@ function getStage(row) {
 }
 
 function getOwner(row) {
-  return text(row["Assigned To"]) || "Unassigned";
+  return text(column(row, "Assigned To", "Assigned_To", "AssignedTo", "Owner")) || "Unassigned";
 }
 
 function getIndustry(row) {
-  return text(row["Industry"]) || "Unknown";
+  return text(column(row, "Industry")) || "Unknown";
 }
 
 function getPCSVertical(row) {
   return (
-    text(row["PCS Vertical"]) ||
+    text(column(row, "PCS Vertical", "PCS_Vertical", "PCSVertical", "PCS  Vertical")) ||
     text(row["PCS  Vertical"]) ||
     text(row["PCS_Vertical"]) ||
     "Unknown"
@@ -300,7 +337,7 @@ function parseDate(value) {
 }
 
 function getCreatedDate(row) {
-  return parseDate(row["Opportunity Created Date"]);
+  return parseDate(column(row, "Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate", "Created Date"));
 }
 
 function getISOWeekInfo(date) {
@@ -356,7 +393,7 @@ function getFiscalQuarterInfo(row) {
 }
 
 function getRegion(row) {
-  const raw = text(row["Customer Service required region"] || row["PCS User Region"]).toLowerCase();
+  const raw = text(column(row, "Customer Service required region", "Customer_Service_required_region", "Customer Service Required Region") || column(row, "PCS User Region", "PCS_User_Region", "PCSUserRegion")).toLowerCase();
   if (!raw) return "Unknown";
 
   const normalized = raw.replace(/&/g, " and ").replace(/[,/;|]+/g, " ").replace(/[-]+/g, " ");
@@ -381,7 +418,7 @@ function getRegion(row) {
 }
 
 function getUpdatedTime(row) {
-  return text(row["Updated Time"] || row["Updated time"] || row["updated_time"]);
+  return text(column(row, "Updated Time", "Updated_Time", "UpdatedTime") || column(row, "Updated Time", "Updated_Time", "UpdatedTime") || column(row, "Updated Time", "Updated_Time", "UpdatedTime"));
 }
 
 function getLatestUpdatedTime(rows) {
@@ -1154,9 +1191,9 @@ function Opportunities({
     const matchesAny = (selected, value) => selected.length === 0 || selected.includes(value);
 
     return opportunities.filter((row) => {
-      const opportunityName = text(row["Opportunity Name"]);
-      const customer = text(row["Customer name"]);
-      const opportunityId = text(row["Opportunity ID"]);
+      const opportunityName = text(column(row, "Opportunity Name", "Opportunity_Name", "OpportunityName"));
+      const customer = text(column(row, "Customer name", "Customer_name", "CustomerName"));
+      const opportunityId = text(column(row, "Opportunity ID", "Opportunity_ID", "OpportunityID", "Opportunity Id"));
 
       const matchesSearch = !query ||
         opportunityName.toLowerCase().includes(query) ||
@@ -3301,15 +3338,15 @@ function Opportunities({
 
                     return (
                       <div
-                        key={row["Opportunity ID"] || index}
+                        key={column(row, "Opportunity ID", "Opportunity_ID", "OpportunityID", "Opportunity Id") || index}
                         className="grid grid-cols-[minmax(0,1fr)_120px_180px_190px] gap-4 items-center px-5 py-3.5 rounded-xl bg-rose-50 border border-rose-100 min-h-[58px]"
                       >
                         <div className="min-w-0">
                           <p className="font-semibold text-sm text-slate-800 break-words">
-                            {text(row["Opportunity Name"]) || "Unnamed opportunity"}
+                            {text(column(row, "Opportunity Name", "Opportunity_Name", "OpportunityName")) || "Unnamed opportunity"}
                           </p>
                           <p className="text-xs text-slate-400 truncate mt-1">
-                            {text(row["Customer name"]) || "Unknown customer"}
+                            {text(column(row, "Customer name", "Customer_name", "CustomerName")) || "Unknown customer"}
                           </p>
                         </div>
                         <p className="text-right text-sm font-semibold text-rose-600 whitespace-nowrap">{age} days</p>

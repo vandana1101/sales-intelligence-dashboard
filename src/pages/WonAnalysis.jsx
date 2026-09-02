@@ -101,16 +101,16 @@ function dateValue(v) {
 
 function getCreatedDate(row) {
   return dateValue(
-    row?.["Opportunity Created Date"]
+    first(row, ["Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate"])
   );
 }
 
 
 function getWonDate(row) {
   return (
-    row?.["Date won"] ||
-    row?.["Won Date"] ||
-    row?.["Onboarded date"]
+    first(row, ["Date won", "Date Won", "Date_won", "DateWon"]) ||
+    first(row, ["Won Date", "Won_Date", "WonDate"]) ||
+    first(row, ["Onboarded date", "Onboarded Date", "Onboarded_date", "OnboardedDate"])
   );
 }
 
@@ -222,7 +222,7 @@ function getFiscalQuarter(row) {
  */
 function getValue(row) {
   const valuesCr = num(
-    row?.["Values in Cr"]
+    first(row, ["Values in Cr", "Values_in_Cr", "ValuesInCr"], "")
   );
 
   if (valuesCr) {
