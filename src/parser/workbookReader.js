@@ -9,17 +9,10 @@ import * as XLSX from "xlsx";
  * - .csv
  *
  * CSV files may contain multiple logical datasets in the same file.
- * For example:
  *
- *   Leads
- *   Opportunities
- *   Activities
- *
- * with unrelated pivot/calculation sections before or between them.
- *
- * The reader detects those dataset headers and converts them into
- * separate logical sheets so the existing classifier/calculation
- * pipeline can continue working normally.
+ * The reader normalizes Excel and CSV values so that the rest of
+ * the dashboard receives the same data representation regardless
+ * of the source file type.
  */
 
 function normalizeHeader(value) {
@@ -31,87 +24,532 @@ function normalizeHeader(value) {
     .replace(/\s+/g, " ");
 }
 
-function readAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+/* =========================================================
+   VALUE NORMALIZATION
+========================================================= */
 
-    reader.onload = () => {
-      resolve(reader.result);
-    };
+function normalizeTextValue(value) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
 
-    reader.onerror = () => {
-      reject(
-        reader.error ||
-          new Error("The file could not be read.")
-      );
-    };
+  const text =
+    String(value)
+      .replace(/^\uFEFF/, "")
+      .trim();
 
-    reader.onabort = () => {
-      reject(
-        new Error(
-          "The file read operation was aborted."
-        )
-      );
-    };
+  if (!text) {
+    return null;
+  }
 
-    reader.readAsArrayBuffer(file);
-  });
+  const normalized =
+    text.toLowerCase();
+
+  /*
+   * Treat common CSV representations of
+   * empty values the same as Excel blanks.
+   */
+  if (
+    normalized === "na" ||
+    normalized === "n/a" ||
+    normalized === "null" ||
+    normalized === "undefined" ||
+    normalized === "-" ||
+    normalized === "--"
+  ) {
+    return null;
+  }
+
+  return text;
 }
 
-function readAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+function looksLikeDateHeader(header) {
+  const value =
+    normalizeHeader(header);
 
-    reader.onload = () => {
-      resolve(reader.result);
+  return (
+    value.includes("date") ||
+    value.includes("time")
+  );
+}
+
+function looksLikePercentageHeader(header) {
+  const value =
+    normalizeHeader(header);
+
+  return (
+    value.includes("%") ||
+    value.includes("percent") ||
+    value.includes("probability")
+  );
+}
+
+function looksLikeNumericHeader(header) {
+  const value =
+    normalizeHeader(header);
+
+  return (
+    value.includes("value") ||
+    value.includes("revenue") ||
+    value.includes("amount") ||
+    value.includes("cost") ||
+    value.includes("price") ||
+    value.includes("days") ||
+    value.includes("age") ||
+    value.includes("count") ||
+    value.includes("score") ||
+    value.includes("quantity") ||
+    value.includes("number") ||
+    value.includes("target")
+  );
+}
+
+function parseNumericValue(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value === "number"
+  ) {
+    return Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  let text =
+    String(value)
+      .trim();
+
+  if (!text) {
+    return null;
+  }
+
+  /*
+   * Remove currency symbols and whitespace.
+   */
+  text = text
+    .replace(/[₹$€£]/g, "")
+    .replace(/\s/g, "");
+
+  /*
+   * Handle percentages.
+   *
+   * The dashboard's existing calculations expect
+   * percentage values as the numeric displayed value.
+   *
+   * Therefore:
+   * "100%" -> 100
+   * "75%"  -> 75
+   */
+  const isPercentage =
+    text.endsWith("%");
+
+  text =
+    text.replace(/%/g, "");
+
+  /*
+   * Handle thousands separators.
+   */
+  text =
+    text.replace(/,/g, "");
+
+  const result =
+    Number(text);
+
+  if (
+    !Number.isFinite(result)
+  ) {
+    return null;
+  }
+
+  return result;
+}
+
+function normalizeDateValue(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  /*
+   * If SheetJS has already returned a Date,
+   * convert it into a stable ISO date string.
+   */
+  if (
+    value instanceof Date
+  ) {
+    if (
+      Number.isNaN(
+        value.getTime()
+      )
+    ) {
+      return null;
+    }
+
+    return value
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  const text =
+    String(value)
+      .replace(/^\uFEFF/, "")
+      .trim();
+
+  if (!text) {
+    return null;
+  }
+
+  /*
+   * DD-MMM-YY / DD-MMM-YYYY
+   *
+   * Examples:
+   * 23-Mar-22
+   * 23-Mar-2022
+   */
+  let match =
+    text.match(
+      /^(\d{1,2})[-/ ]([A-Za-z]{3,9})[-/ ](\d{2,4})$/
+    );
+
+  if (match) {
+    const day =
+      Number(match[1]);
+
+    const monthText =
+      match[2]
+        .slice(0, 3)
+        .toLowerCase();
+
+    let year =
+      Number(match[3]);
+
+    if (year < 100) {
+      year +=
+        year >= 50
+          ? 1900
+          : 2000;
+    }
+
+    const months = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
     };
 
-    reader.onerror = () => {
-      reject(
-        reader.error ||
-          new Error("The file could not be read.")
+    if (
+      Object.prototype.hasOwnProperty.call(
+        months,
+        monthText
+      )
+    ) {
+      const date =
+        new Date(
+          year,
+          months[monthText],
+          day
+        );
+
+      if (
+        date.getFullYear() === year &&
+        date.getMonth() ===
+          months[monthText] &&
+        date.getDate() === day
+      ) {
+        return date
+          .toISOString()
+          .slice(0, 10);
+      }
+    }
+  }
+
+  /*
+   * DD/MM/YYYY or DD-MM-YYYY
+   */
+  match =
+    text.match(
+      /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/
+    );
+
+  if (match) {
+    const day =
+      Number(match[1]);
+
+    const month =
+      Number(match[2]) - 1;
+
+    const year =
+      Number(match[3]);
+
+    const date =
+      new Date(
+        year,
+        month,
+        day
       );
-    };
 
-    reader.onabort = () => {
-      reject(
-        new Error(
-          "The file read operation was aborted."
-        )
-      );
-    };
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month &&
+      date.getDate() === day
+    ) {
+      return date
+        .toISOString()
+        .slice(0, 10);
+    }
+  }
 
-    reader.readAsText(file);
-  });
+  /*
+   * ISO timestamps / ISO dates.
+   */
+  const parsed =
+    new Date(text);
+
+  if (
+    !Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+    return parsed
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  /*
+   * If this doesn't look like a valid date,
+   * keep the original value rather than destroying
+   * information.
+   */
+  return text;
 }
 
 /**
- * Determines whether an array represents the header row
- * for one of our supported datasets.
+ * Normalize a row consistently regardless of whether
+ * it came from Excel or CSV.
  */
+function normalizeRow(row) {
+  if (
+    !row ||
+    typeof row !== "object"
+  ) {
+    return {};
+  }
+
+  const normalizedRow = {};
+
+  Object.entries(row).forEach(
+    ([header, value]) => {
+      const cleanHeader =
+        String(header ?? "")
+          .replace(/^\uFEFF/, "")
+          .trim();
+
+      if (!cleanHeader) {
+        return;
+      }
+
+      /*
+       * Preserve the ORIGINAL header name.
+       *
+       * The rest of the application already knows the
+       * business column names and has tolerant header
+       * matching.
+       */
+      if (
+        looksLikeDateHeader(
+          cleanHeader
+        )
+      ) {
+        normalizedRow[
+          cleanHeader
+        ] =
+          normalizeDateValue(
+            value
+          );
+
+        return;
+      }
+
+      if (
+        looksLikePercentageHeader(
+          cleanHeader
+        ) ||
+        looksLikeNumericHeader(
+          cleanHeader
+        )
+      ) {
+        const numeric =
+          parseNumericValue(
+            value
+          );
+
+        /*
+         * Only replace with numeric form when the
+         * value is actually numeric.
+         */
+        normalizedRow[
+          cleanHeader
+        ] =
+          numeric !== null
+            ? numeric
+            : normalizeTextValue(
+                value
+              );
+
+        return;
+      }
+
+      normalizedRow[
+        cleanHeader
+      ] =
+        normalizeTextValue(
+          value
+        );
+    }
+  );
+
+  return normalizedRow;
+}
+
+function normalizeRows(rows) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map(
+    normalizeRow
+  );
+}
+
+/* =========================================================
+   FILE READERS
+========================================================= */
+
+function readAsArrayBuffer(file) {
+  return new Promise(
+    (resolve, reject) => {
+      const reader =
+        new FileReader();
+
+      reader.onload = () => {
+        resolve(
+          reader.result
+        );
+      };
+
+      reader.onerror = () => {
+        reject(
+          reader.error ||
+            new Error(
+              "The file could not be read."
+            )
+        );
+      };
+
+      reader.onabort = () => {
+        reject(
+          new Error(
+            "The file read operation was aborted."
+          )
+        );
+      };
+
+      reader.readAsArrayBuffer(
+        file
+      );
+    }
+  );
+}
+
+function readAsText(file) {
+  return new Promise(
+    (resolve, reject) => {
+      const reader =
+        new FileReader();
+
+      reader.onload = () => {
+        resolve(
+          reader.result
+        );
+      };
+
+      reader.onerror = () => {
+        reject(
+          reader.error ||
+            new Error(
+              "The file could not be read."
+            )
+        );
+      };
+
+      reader.onabort = () => {
+        reject(
+          new Error(
+            "The file read operation was aborted."
+          )
+        );
+      };
+
+      reader.readAsText(
+        file
+      );
+    }
+  );
+}
+
+/* =========================================================
+   DATASET DETECTION
+========================================================= */
+
 function detectDatasetType(row) {
   if (!Array.isArray(row)) {
     return null;
   }
 
-  const headers = row
-    .map(normalizeHeader)
-    .filter(Boolean);
+  const headers =
+    row
+      .map(normalizeHeader)
+      .filter(Boolean);
 
   if (!headers.length) {
     return null;
   }
 
-  const headerSet = new Set(headers);
+  const headerSet =
+    new Set(headers);
 
   /*
-   * Opportunity dataset
+   * Opportunities
    */
   const hasOpportunityId =
-    headerSet.has("opportunity id");
+    headerSet.has(
+      "opportunity id"
+    );
 
   const hasOpportunityStage =
-    headerSet.has("opportunity stage");
+    headerSet.has(
+      "opportunity stage"
+    );
 
   const hasOpportunityCreatedDate =
     headerSet.has(
@@ -129,16 +567,22 @@ function detectDatasetType(row) {
   }
 
   /*
-   * Lead dataset
+   * Leads
    */
   const hasLeadId =
-    headerSet.has("lead id");
+    headerSet.has(
+      "lead id"
+    );
 
   const hasLeadStage =
-    headerSet.has("lead stage");
+    headerSet.has(
+      "lead stage"
+    );
 
   const hasLeadSource =
-    headerSet.has("lead source");
+    headerSet.has(
+      "lead source"
+    );
 
   if (
     hasLeadId &&
@@ -151,25 +595,31 @@ function detectDatasetType(row) {
   }
 
   /*
-   * Activity dataset
-   *
-   * The source file uses "Activitys ID",
-   * so both the original spelling and common
-   * corrected spelling are supported.
+   * Activities
    */
   const hasActivityId =
-    headerSet.has("activitys id") ||
-    headerSet.has("activity id");
+    headerSet.has(
+      "activitys id"
+    ) ||
+    headerSet.has(
+      "activity id"
+    );
 
   const hasMeetingDate =
     headerSet.has(
       "meeting scheduled date"
     ) ||
-    headerSet.has("meeting date");
+    headerSet.has(
+      "meeting date"
+    );
 
   const hasActivityStatus =
-    headerSet.has("status") ||
-    headerSet.has("activity status");
+    headerSet.has(
+      "status"
+    ) ||
+    headerSet.has(
+      "activity status"
+    );
 
   if (
     hasActivityId &&
@@ -184,70 +634,76 @@ function detectDatasetType(row) {
   return null;
 }
 
-/**
- * Converts a CSV worksheet into logical datasets.
- *
- * This handles CSV exports that contain multiple tables/sections
- * in one file, such as:
- *
- *   miscellaneous/pivot data
- *   Leads
- *   miscellaneous data
- *   Opportunities
- *   miscellaneous data
- *   Activities
- */
-function splitCSVIntoDatasets(worksheet) {
-  const rows = XLSX.utils.sheet_to_json(
-    worksheet,
-    {
-      header: 1,
-      defval: null,
-      raw: false,
-      blankrows: true,
+/* =========================================================
+   CSV DATASET SPLITTING
+========================================================= */
+
+function splitCSVIntoDatasets(
+  worksheet
+) {
+  const rows =
+    XLSX.utils.sheet_to_json(
+      worksheet,
+      {
+        header: 1,
+        defval: null,
+        raw: false,
+        blankrows: true,
+      }
+    );
+
+  const detectedSections =
+    [];
+
+  rows.forEach(
+    (row, index) => {
+      const type =
+        detectDatasetType(
+          row
+        );
+
+      if (!type) {
+        return;
+      }
+
+      /*
+       * Only detect the first occurrence of
+       * each logical dataset.
+       */
+      const alreadyDetected =
+        detectedSections.some(
+          (section) =>
+            section.type === type
+        );
+
+      if (
+        !alreadyDetected
+      ) {
+        detectedSections.push({
+          type,
+          headerIndex: index,
+        });
+      }
     }
   );
 
-  const detectedSections = [];
-
-  rows.forEach((row, index) => {
-    const type =
-      detectDatasetType(row);
-
-    if (!type) {
-      return;
-    }
-
-    /*
-     * Prevent duplicate detection if a malformed file
-     * happens to repeat a header.
-     */
-    const alreadyDetected =
-      detectedSections.some(
-        (section) =>
-          section.type === type
-      );
-
-    if (!alreadyDetected) {
-      detectedSections.push({
-        type,
-        headerIndex: index,
-      });
-    }
-  });
-
   /*
-   * If no known dataset headers were found,
-   * fall back to the normal single-sheet CSV behavior.
+   * No known datasets:
+   * let the normal CSV reader handle it.
    */
-  if (!detectedSections.length) {
+  if (
+    !detectedSections.length
+  ) {
     return null;
   }
 
   const sheets = {};
 
   detectedSections.forEach(
-    (section, sectionIndex) => {
+    (
+      section,
+      sectionIndex
+    ) => {
       const nextSection =
         detectedSections[
           sectionIndex + 1
@@ -261,16 +717,15 @@ function splitCSVIntoDatasets(worksheet) {
           ? nextSection.headerIndex
           : rows.length;
 
-      const sectionRows =
-        rows.slice(start, end);
-
-      if (!sectionRows.length) {
-        return;
-      }
+      let sectionRows =
+        rows.slice(
+          start,
+          end
+        );
 
       /*
-       * Remove completely empty rows from the end
-       * and beginning of the logical section.
+       * Remove blank rows around the
+       * logical dataset.
        */
       while (
         sectionRows.length &&
@@ -278,7 +733,8 @@ function splitCSVIntoDatasets(worksheet) {
           (value) =>
             value === null ||
             value === undefined ||
-            String(value).trim() === ""
+            String(value).trim() ===
+              ""
         )
       ) {
         sectionRows.shift();
@@ -292,13 +748,16 @@ function splitCSVIntoDatasets(worksheet) {
           (value) =>
             value === null ||
             value === undefined ||
-            String(value).trim() === ""
+            String(value).trim() ===
+              ""
         )
       ) {
         sectionRows.pop();
       }
 
-      if (!sectionRows.length) {
+      if (
+        !sectionRows.length
+      ) {
         return;
       }
 
@@ -317,23 +776,27 @@ function splitCSVIntoDatasets(worksheet) {
         );
 
       sheets[section.type] =
-        jsonRows;
+        normalizeRows(
+          jsonRows
+        );
     }
   );
 
   return sheets;
 }
 
+/* =========================================================
+   CSV READER
+========================================================= */
+
 async function readCSV(file) {
-  /*
-   * CSV is text data, so read it directly as text.
-   */
   try {
     const csvText =
       await file.text();
 
     if (
-      typeof csvText !== "string" ||
+      typeof csvText !==
+        "string" ||
       !csvText.trim()
     ) {
       throw new Error(
@@ -342,11 +805,14 @@ async function readCSV(file) {
     }
 
     const workbook =
-      XLSX.read(csvText, {
-        type: "string",
-        raw: false,
-        cellDates: true,
-      });
+      XLSX.read(
+        csvText,
+        {
+          type: "string",
+          raw: false,
+          cellDates: true,
+        }
+      );
 
     const firstSheetName =
       workbook.SheetNames[0];
@@ -357,9 +823,8 @@ async function readCSV(file) {
       ];
 
     /*
-     * IMPORTANT:
-     * Check whether this CSV contains multiple
-     * logical datasets.
+     * Your CSV export contains multiple logical
+     * datasets inside one physical CSV.
      */
     const datasets =
       splitCSVIntoDatasets(
@@ -368,30 +833,64 @@ async function readCSV(file) {
 
     if (
       datasets &&
-      Object.keys(datasets).length
+      Object.keys(datasets)
+        .length
     ) {
       return {
         SheetNames:
-          Object.keys(datasets),
+          Object.keys(
+            datasets
+          ),
+
         Sheets: datasets,
       };
     }
 
     /*
-     * Normal single-table CSV fallback.
+     * Normal single-table CSV.
      */
-    return workbook;
+    const sheets = {};
+
+    workbook.SheetNames.forEach(
+      (sheetName) => {
+        const worksheet =
+          workbook.Sheets[
+            sheetName
+          ];
+
+        const rows =
+          XLSX.utils.sheet_to_json(
+            worksheet,
+            {
+              defval: null,
+              raw: false,
+            }
+          );
+
+        sheets[sheetName] =
+          normalizeRows(
+            rows
+          );
+      }
+    );
+
+    return {
+      SheetNames:
+        workbook.SheetNames,
+
+      Sheets: sheets,
+    };
   } catch (textError) {
     /*
-     * Fallback for browsers/environments where
-     * File.text() cannot read the selected file.
+     * FileReader fallback.
      */
     try {
       const csvText =
         await readAsText(file);
 
       if (
-        typeof csvText !== "string" ||
+        typeof csvText !==
+          "string" ||
         !csvText.trim()
       ) {
         throw new Error(
@@ -400,11 +899,14 @@ async function readCSV(file) {
       }
 
       const workbook =
-        XLSX.read(csvText, {
-          type: "string",
-          raw: false,
-          cellDates: true,
-        });
+        XLSX.read(
+          csvText,
+          {
+            type: "string",
+            raw: false,
+            cellDates: true,
+          }
+        );
 
       const firstSheetName =
         workbook.SheetNames[0];
@@ -421,16 +923,50 @@ async function readCSV(file) {
 
       if (
         datasets &&
-        Object.keys(datasets).length
+        Object.keys(datasets)
+          .length
       ) {
         return {
           SheetNames:
-            Object.keys(datasets),
+            Object.keys(
+              datasets
+            ),
+
           Sheets: datasets,
         };
       }
 
-      return workbook;
+      const sheets = {};
+
+      workbook.SheetNames.forEach(
+        (sheetName) => {
+          const worksheet =
+            workbook.Sheets[
+              sheetName
+            ];
+
+          const rows =
+            XLSX.utils.sheet_to_json(
+              worksheet,
+              {
+                defval: null,
+                raw: false,
+              }
+            );
+
+          sheets[sheetName] =
+            normalizeRows(
+              rows
+            );
+        }
+      );
+
+      return {
+        SheetNames:
+          workbook.SheetNames,
+
+        Sheets: sheets,
+      };
     } catch (fallbackError) {
       throw new Error(
         `CSV file could not be read. ${
@@ -443,32 +979,42 @@ async function readCSV(file) {
   }
 }
 
+/* =========================================================
+   EXCEL READER
+========================================================= */
+
 async function readExcel(file) {
-  /*
-   * Excel files are binary, so use ArrayBuffer.
-   */
+  let workbook;
+
   try {
     const buffer =
       await file.arrayBuffer();
 
-    return XLSX.read(buffer, {
-      type: "array",
-      cellDates: true,
-      raw: false,
-    });
+    workbook =
+      XLSX.read(
+        buffer,
+        {
+          type: "array",
+          cellDates: true,
+          raw: false,
+        }
+      );
   } catch (arrayBufferError) {
-    /*
-     * Fallback to FileReader.
-     */
     try {
       const buffer =
-        await readAsArrayBuffer(file);
+        await readAsArrayBuffer(
+          file
+        );
 
-      return XLSX.read(buffer, {
-        type: "array",
-        cellDates: true,
-        raw: false,
-      });
+      workbook =
+        XLSX.read(
+          buffer,
+          {
+            type: "array",
+            cellDates: true,
+            raw: false,
+          }
+        );
     } catch (fallbackError) {
       throw new Error(
         `Excel file could not be read. ${
@@ -479,9 +1025,51 @@ async function readExcel(file) {
       );
     }
   }
+
+  /*
+   * Normalize Excel rows using the EXACT same
+   * normalization function used for CSV.
+   */
+  const sheets = {};
+
+  workbook.SheetNames.forEach(
+    (sheetName) => {
+      const worksheet =
+        workbook.Sheets[
+          sheetName
+        ];
+
+      const rows =
+        XLSX.utils.sheet_to_json(
+          worksheet,
+          {
+            defval: null,
+            raw: false,
+          }
+        );
+
+      sheets[sheetName] =
+        normalizeRows(
+          rows
+        );
+    }
+  );
+
+  return {
+    SheetNames:
+      workbook.SheetNames,
+
+    Sheets: sheets,
+  };
 }
 
-export async function readWorkbook(file) {
+/* =========================================================
+   PUBLIC API
+========================================================= */
+
+export async function readWorkbook(
+  file
+) {
   if (!file) {
     throw new Error(
       "No file was provided."
@@ -515,7 +1103,9 @@ export async function readWorkbook(file) {
 
   let workbook;
 
-  if (extension === "csv") {
+  if (
+    extension === "csv"
+  ) {
     workbook =
       await readCSV(file);
   } else {
@@ -528,42 +1118,50 @@ export async function readWorkbook(file) {
     !Array.isArray(
       workbook.SheetNames
     ) ||
-    workbook.SheetNames.length === 0
+    workbook.SheetNames.length ===
+      0
   ) {
     throw new Error(
       "No readable data was found in the file."
     );
   }
 
+  /*
+   * At this point CSV and Excel both return
+   * normalized row arrays.
+   */
   const sheets = {};
 
   workbook.SheetNames.forEach(
     (sheetName) => {
-      /*
-       * For a normal Excel workbook, Sheets[sheetName]
-       * is a worksheet.
-       *
-       * For our multi-dataset CSV, Sheets[sheetName]
-       * is already an array of normalized rows.
-       */
       const source =
         workbook.Sheets[
           sheetName
         ];
 
-      if (Array.isArray(source)) {
+      if (
+        Array.isArray(source)
+      ) {
         sheets[sheetName] =
-          source;
+          normalizeRows(
+            source
+          );
+
         return;
       }
 
-      sheets[sheetName] =
+      const rows =
         XLSX.utils.sheet_to_json(
           source,
           {
             defval: null,
             raw: false,
           }
+        );
+
+      sheets[sheetName] =
+        normalizeRows(
+          rows
         );
     }
   );
