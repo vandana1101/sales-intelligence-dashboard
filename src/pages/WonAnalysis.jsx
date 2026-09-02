@@ -30,16 +30,24 @@ import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
 
+
 /* =========================================================
    HELPERS
 ========================================================= */
 
 function text(v) {
-  return v === null || v === undefined ? "" : String(v).trim();
+  return v === null || v === undefined
+    ? ""
+    : String(v).trim();
 }
 
+
 function num(v) {
-  if (v === null || v === undefined || v === "") {
+  if (
+    v === null ||
+    v === undefined ||
+    v === ""
+  ) {
     return 0;
   }
 
@@ -48,11 +56,13 @@ function num(v) {
   }
 
   const n = Number(
-    String(v).replace(/[₹,%\s,]/g, "")
+    String(v)
+      .replace(/[₹,%\s,]/g, "")
   );
 
   return Number.isFinite(n) ? n : 0;
 }
+
 
 /* =========================================================
    DATE HELPERS
@@ -73,22 +83,28 @@ function dateValue(v) {
   if (typeof v === "number") {
     const d = new Date(
       Date.UTC(1899, 11, 30) +
-        v * 86400000
+      v * 86400000
     );
 
-    return Number.isNaN(d.getTime()) ? null : d;
+    return Number.isNaN(d.getTime())
+      ? null
+      : d;
   }
 
   const d = new Date(v);
 
-  return Number.isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime())
+    ? null
+    : d;
 }
+
 
 function getCreatedDate(row) {
   return dateValue(
     row?.["Opportunity Created Date"]
   );
 }
+
 
 function getWonDate(row) {
   return (
@@ -97,6 +113,7 @@ function getWonDate(row) {
     row?.["Onboarded date"]
   );
 }
+
 
 function getWonYear(row) {
   const d = dateValue(getWonDate(row));
@@ -112,17 +129,7 @@ function getWonYear(row) {
     : "Unknown";
 }
 
-function getCreatedYear(row) {
-  const d = getCreatedDate(row);
 
-  return d
-    ? String(d.getFullYear())
-    : "Unknown";
-}
-
-/*
- * Week is based directly on Opportunity Created Date.
- */
 function getOpportunityWeek(row) {
   const d = getCreatedDate(row);
 
@@ -137,8 +144,10 @@ function getOpportunityWeek(row) {
   );
 
   const diff = Math.floor(
-    (d.getTime() - start.getTime()) /
-      86400000
+    (
+      d.getTime() -
+      start.getTime()
+    ) / 86400000
   );
 
   const week =
@@ -147,6 +156,7 @@ function getOpportunityWeek(row) {
   return `Week ${week} ${d.getFullYear()}`;
 }
 
+
 function getOpportunityMonth(row) {
   const d = getCreatedDate(row);
 
@@ -154,11 +164,15 @@ function getOpportunityMonth(row) {
     return "Unknown";
   }
 
-  return d.toLocaleString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
+  return d.toLocaleString(
+    "en-US",
+    {
+      month: "short",
+      year: "numeric",
+    }
+  );
 }
+
 
 /*
  * Fiscal year:
@@ -167,10 +181,6 @@ function getOpportunityMonth(row) {
  * Q2 = Jul-Sep
  * Q3 = Oct-Dec
  * Q4 = Jan-Mar
- *
- * Example:
- * Apr 2025 -> Q1 2025
- * Jan 2025 -> Q4 2025
  */
 function getFiscalQuarter(row) {
   const d = getCreatedDate(row);
@@ -181,189 +191,42 @@ function getFiscalQuarter(row) {
 
   const month = d.getMonth() + 1;
 
+  let quarter;
+
   if (month >= 4 && month <= 6) {
-    return `Q1 ${d.getFullYear()}`;
+    quarter = "Q1";
+  } else if (month >= 7 && month <= 9) {
+    quarter = "Q2";
+  } else if (month >= 10 && month <= 12) {
+    quarter = "Q3";
+  } else {
+    quarter = "Q4";
   }
 
-  if (month >= 7 && month <= 9) {
-    return `Q2 ${d.getFullYear()}`;
-  }
-
-  if (month >= 10 && month <= 12) {
-    return `Q3 ${d.getFullYear()}`;
-  }
-
-  return `Q4 ${d.getFullYear()}`;
+  return `${quarter} ${d.getFullYear()}`;
 }
 
-/* =========================================================
-   SORTING FOR DATE FILTERS
-========================================================= */
-
-function sortDescending(values, type) {
-  return [...values].sort((a, b) => {
-    if (a === "Unknown") return 1;
-    if (b === "Unknown") return -1;
-
-    if (type === "year") {
-      return Number(b) - Number(a);
-    }
-
-    if (type === "week") {
-      const ma = String(a).match(
-        /Week\s*(\d+)\s+(\d{4})/
-      );
-
-      const mb = String(b).match(
-        /Week\s*(\d+)\s+(\d{4})/
-      );
-
-      if (!ma || !mb) {
-        return String(b).localeCompare(String(a));
-      }
-
-      const ya = Number(ma[2]);
-      const yb = Number(mb[2]);
-      const wa = Number(ma[1]);
-      const wb = Number(mb[1]);
-
-      return yb - ya || wb - wa;
-    }
-
-    if (type === "month") {
-      const ma = String(a).match(
-        /^([A-Za-z]{3})\s+(\d{4})$/
-      );
-
-      const mb = String(b).match(
-        /^([A-Za-z]{3})\s+(\d{4})$/
-      );
-
-      if (!ma || !mb) {
-        return String(b).localeCompare(String(a));
-      }
-
-      const monthIndex = {
-        Jan: 0,
-        Feb: 1,
-        Mar: 2,
-        Apr: 3,
-        May: 4,
-        Jun: 5,
-        Jul: 6,
-        Aug: 7,
-        Sep: 8,
-        Oct: 9,
-        Nov: 10,
-        Dec: 11,
-      };
-
-      const da = new Date(
-        Number(ma[2]),
-        monthIndex[ma[1]],
-        1
-      );
-
-      const db = new Date(
-        Number(mb[2]),
-        monthIndex[mb[1]],
-        1
-      );
-
-      return db - da;
-    }
-
-    if (type === "quarter") {
-      const ma = String(a).match(
-        /^Q(\d)\s+(\d{4})$/
-      );
-
-      const mb = String(b).match(
-        /^Q(\d)\s+(\d{4})$/
-      );
-
-      if (!ma || !mb) {
-        return String(b).localeCompare(String(a));
-      }
-
-      const ya = Number(ma[2]);
-      const yb = Number(mb[2]);
-      const qa = Number(ma[1]);
-      const qb = Number(mb[1]);
-
-      return yb - ya || qb - qa;
-    }
-
-    return String(b).localeCompare(String(a));
-  });
-}
 
 /* =========================================================
    VALUE
 ========================================================= */
 
 /*
+ * Value is always converted into Crores.
+ *
  * Priority:
  *
- * 1. Any "Values in Cr" / "Value in Cr" type field
+ * 1. Values in Cr
  * 2. Value of Contract Per Annum INR / 10^7
  * 3. Revenue potential per month × 12 / 10^7
- *
- * Everything returned from this function is in CRORES.
  */
-
-function getCrValueField(row) {
-  const preferredKeys = [
-    "Values in Cr",
-    "Value in Cr",
-    "Value (Cr)",
-    "Values (Cr)",
-    "Value in Crores",
-    "Values in Crores",
-    "Value of Contract Per Annum in Cr",
-  ];
-
-  for (const key of preferredKeys) {
-    if (
-      Object.prototype.hasOwnProperty.call(
-        row || {},
-        key
-      )
-    ) {
-      return num(row[key]);
-    }
-  }
-
-  /*
-   * Fallback header detection for slightly
-   * different source-column naming.
-   */
-  const keys = Object.keys(row || {});
-
-  const dynamicKey = keys.find((key) => {
-    const k = key
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return (
-      k.includes("value") &&
-      k.includes("cr") &&
-      !k.includes("per annum inr") &&
-      !k.includes("contract per annum")
-    );
-  });
-
-  return dynamicKey
-    ? num(row[dynamicKey])
-    : 0;
-}
-
 function getValue(row) {
-  const crValue = getCrValueField(row);
+  const valuesCr = num(
+    row?.["Values in Cr"]
+  );
 
-  if (crValue !== 0) {
-    return crValue;
+  if (valuesCr) {
+    return valuesCr;
   }
 
   const annual = num(
@@ -372,7 +235,7 @@ function getValue(row) {
     ]
   );
 
-  if (annual !== 0) {
+  if (annual) {
     return annual / 10000000;
   }
 
@@ -382,9 +245,10 @@ function getValue(row) {
     ]
   );
 
-  if (monthly !== 0) {
+  if (monthly) {
     return (
-      (monthly * 12) /
+      monthly *
+      12 /
       10000000
     );
   }
@@ -392,15 +256,18 @@ function getValue(row) {
   return 0;
 }
 
+
 function formatCr(v) {
   return `₹${num(v).toFixed(2)} Cr`;
 }
 
+
 function formatInt(v) {
-  return Math.round(num(v)).toLocaleString(
-    "en-IN"
-  );
+  return Math.round(
+    num(v)
+  ).toLocaleString("en-IN");
 }
+
 
 function formatPct(v) {
   return `${(
@@ -408,8 +275,9 @@ function formatPct(v) {
   ).toFixed(1)}%`;
 }
 
+
 /* =========================================================
-   GENERIC FIELD HELPERS
+   GENERIC FIELD HELPER
 ========================================================= */
 
 function first(
@@ -428,41 +296,60 @@ function first(
   return fallback;
 }
 
+
 /* =========================================================
    FIELD GETTERS
 ========================================================= */
 
 function getOwner(row) {
-  return first(row, [
-    "Assigned To",
-    "Salesforce User Name",
-    "Sales Owner",
-  ]);
+  return first(
+    row,
+    [
+      "Assigned To",
+      "Salesforce User Name",
+      "Sales Owner",
+    ]
+  );
 }
 
+
+/*
+ * IMPORTANT:
+ * PCS Vertical comes directly from the
+ * PCS Vertical column in the Opportunities data.
+ */
 function getPCSVertical(row) {
-  return first(row, [
-    "PCS Vertical",
-    "PCS vertical",
-    "PCS_Vertical",
-  ]);
+  return first(
+    row,
+    [
+      "PCS Vertical",
+      "PCS vertical",
+      "PCS_Vertical",
+    ]
+  );
 }
 
-function getIndustry(row) {
-  return first(row, ["Industry"]);
-}
 
-function getDealSize(row) {
-  return first(row, ["Deal Size Bucket"]);
-}
-
+/*
+ * Services come directly from Services Required.
+ * Capability Required is retained only as a
+ * fallback for older datasets.
+ */
 function getService(row) {
-  return first(row, [
-    "Capability Required",
-    "Capability required",
-    "Services Required",
-  ]);
+  return first(
+    row,
+    [
+      "Services Required",
+      "Services required",
+      "services required",
+      "Services",
+      "services",
+      "Capability Required",
+      "Capability required",
+    ]
+  );
 }
+
 
 function getRawWinReason(row) {
   return first(
@@ -475,6 +362,58 @@ function getRawWinReason(row) {
     ""
   );
 }
+
+
+/* =========================================================
+   DEAL SIZE BANDS
+========================================================= */
+
+const DEAL_SIZE_BANDS = [
+  {
+    name: "0–1 Cr",
+    min: 0,
+    max: 1,
+  },
+  {
+    name: "1–5 Cr",
+    min: 1,
+    max: 5,
+  },
+  {
+    name: "5–10 Cr",
+    min: 5,
+    max: 10,
+  },
+  {
+    name: "10–15 Cr",
+    min: 10,
+    max: 15,
+  },
+  {
+    name: "15–20 Cr",
+    min: 15,
+    max: 20,
+  },
+  {
+    name: ">20 Cr",
+    min: 20,
+    max: Infinity,
+  },
+];
+
+
+function getDealSize(row) {
+  const value = getValue(row);
+
+  const band = DEAL_SIZE_BANDS.find(
+    (item) =>
+      value >= item.min &&
+      value < item.max
+  );
+
+  return band?.name || "Unknown";
+}
+
 
 /* =========================================================
    REGION STANDARDIZATION
@@ -496,9 +435,9 @@ function getStandardizedRegion(row) {
     return "Unknown";
   }
 
-  /*
-   * Explicit PAN INDIA.
-   */
+
+  /* PAN INDIA */
+
   if (
     raw.includes("pan india") ||
     raw.includes("pan-india") ||
@@ -509,7 +448,8 @@ function getStandardizedRegion(row) {
     return "Pan India";
   }
 
-  const northTokens = [
+
+  const north = [
     "north",
     "delhi",
     "ncr",
@@ -520,16 +460,12 @@ function getStandardizedRegion(row) {
     "uttar pradesh",
     "jammu",
     "jammu & kashmir",
-    "jammu and kashmir",
     "rajasthan",
     "chandigarh",
-    "lucknow",
-    "noida",
-    "gurgaon",
-    "gurugram",
-  ];
+  ].some((x) => raw.includes(x));
 
-  const southTokens = [
+
+  const south = [
     "south",
     "bangalore",
     "bengaluru",
@@ -543,12 +479,10 @@ function getStandardizedRegion(row) {
     "andhra",
     "andhra pradesh",
     "coimbatore",
-    "madurai",
-    "mysore",
-    "mysuru",
-  ];
+  ].some((x) => raw.includes(x));
 
-  const eastTokens = [
+
+  const east = [
     "east",
     "kolkata",
     "west bengal",
@@ -560,9 +494,10 @@ function getStandardizedRegion(row) {
     "guwahati",
     "bhubaneswar",
     "patna",
-  ];
+  ].some((x) => raw.includes(x));
 
-  const westTokens = [
+
+  const west = [
     "west",
     "mumbai",
     "maharashtra",
@@ -575,78 +510,21 @@ function getStandardizedRegion(row) {
     "madhya pradesh",
     "indore",
     "nagpur",
-  ];
+  ].some((x) => raw.includes(x));
 
-  const hasAny = (tokens) =>
-    tokens.some((token) =>
-      raw.includes(token)
-    );
 
-  const north = hasAny(northTokens);
-  const south = hasAny(southTokens);
-  const east = hasAny(eastTokens);
-  const west = hasAny(westTokens);
-
-  /*
-   * If North + South + East + West are all present,
-   * treat it as PAN INDIA.
-   */
-  if (
-    north &&
-    south &&
-    east &&
-    west
-  ) {
-    return "Pan India";
-  }
-
-  /*
-   * Multiple directions.
-   */
-  const directionCount = [
+  const directions = [
     north,
     south,
     east,
     west,
   ].filter(Boolean).length;
 
-  if (directionCount > 1) {
+
+  if (directions > 1) {
     return "Multiple Locations";
   }
 
-  /*
-   * Explicit multiple-location wording.
-   */
-  const multipleLocationPattern =
-    /,|\band\b|&|\/|;|\+/i;
-
-  if (
-    multipleLocationPattern.test(raw) &&
-    directionCount === 1
-  ) {
-    /*
-     * If several known location tokens occur,
-     * classify as Multiple Locations.
-     */
-    const allTokens = [
-      ...northTokens,
-      ...southTokens,
-      ...eastTokens,
-      ...westTokens,
-    ];
-
-    const matches = allTokens.filter(
-      (token) => raw.includes(token)
-    );
-
-    const uniqueMatches = [
-      ...new Set(matches),
-    ];
-
-    if (uniqueMatches.length > 1) {
-      return "Multiple Locations";
-    }
-  }
 
   if (north) {
     return "North";
@@ -664,26 +542,14 @@ function getStandardizedRegion(row) {
     return "West";
   }
 
+
   return "Unknown";
 }
+
 
 /* =========================================================
    WIN REASON STANDARDIZATION
 ========================================================= */
-
-const WIN_REASON_CATEGORIES = [
-  "New Requirement / Expansion",
-  "Service Quality",
-  "Cost / Commercial",
-  "Contract / Agreement Cycle",
-  "Moving to Organized / Professional 3PL",
-  "Operational Issues",
-  "Vendor Diversification / Reducing Dependency",
-  "Space / Facility Constraint",
-  "Consolidation / Restructuring / Relocation",
-  "Other / Unclear",
-  "Unknown",
-];
 
 function standardizeWinReason(row) {
   const raw = getRawWinReason(row);
@@ -696,126 +562,122 @@ function standardizeWinReason(row) {
     .toLowerCase()
     .trim();
 
+
   if (
     !value ||
     value === "n/a" ||
     value === "na" ||
     value === "nil" ||
     value === "-" ||
-    value === "?" ||
-    value === "not applicable"
+    value === "?"
   ) {
     return "Unknown";
   }
 
-  /*
-   * The order here matters.
-   * Specific categories are checked before
-   * broad categories such as Service / Cost.
-   */
 
   /* CONSOLIDATION */
 
   if (
-    /consolidat|restructur|relocat|merging|merge|warehouse.*shift|shift.*warehouse|moving to a larger|moving to bigger|changing location|multiple locations|regional players|location preference/i.test(
-      value
-    )
+    /consolidat|restructur|relocat|merging|merge|warehouse.*shift|shift.*warehouse|larger warehouse|bigger space|moving to a larger/i
+      .test(value)
   ) {
     return "Consolidation / Restructuring / Relocation";
   }
 
+
   /* SPACE / FACILITY */
 
   if (
-    /space|warehouse caught fire|fire system|warehouse option|facility|wh size|wh size expansion|space crunch|additional space|bigger.*space|larger.*space|poor condition of wh|warehousing option|warehouse extension|warehouse priority|warehouse$/i.test(
-      value
-    )
+    /space|warehouse caught fire|fire system|warehouse option|facility|wh size|wh size expansion|space crunch|additional space|bigger.*space|larger.*space|poor condition of wh/i
+      .test(value)
   ) {
     return "Space / Facility Constraint";
   }
 
+
   /* CONTRACT */
 
   if (
-    /contract|agreement|annual rfq|rfq|bidding|auction|3\+2|term expire|term over|yearly bidding|renewal|encirclement/i.test(
-      value
-    )
+    /contract|agreement|annual rfq|rfq|bidding|auction|3\+2|term expire|term over|yearly bidding|renewal|encirclement/i
+      .test(value)
   ) {
     return "Contract / Agreement Cycle";
   }
 
+
   /* PROFESSIONAL 3PL */
 
   if (
-    /professional.*3pl|move to 3pl|move.*professional|outsource.*3pl|organised|organized.*player|professional player|3pl player|3pl model|shift to 3pl|formal player|well organised|well organized|self.?manage.*outsource|outsource.*self|cfa to 3pl|looking to outsource|want to outsource/i.test(
-      value
-    )
+    /professional.*3pl|move to 3pl|move.*professional|outsource.*3pl|organised|organized.*player|professional player|3pl player|3pl model|shift to 3pl|formal player|well organised/i
+      .test(value)
   ) {
     return "Moving to Organized / Professional 3PL";
   }
 
+
   /* VENDOR DIVERSIFICATION */
 
   if (
-    /reducing depend|reduce depend|adding.*vendor|adding.*player|new vendor addition|addition of new|multiple ff|multiple.*vendor|more.*vendor|more.*player|introducing new vendor|vehicle placement|new suppliers|new vendor|new vendors|new supplier|addition.*supplier|incorporate.*transport|incorporate.*vendor/i.test(
-      value
-    )
+    /reducing depend|reduce depend|adding.*vendor|adding.*player|new vendor addition|addition of new|multiple ff|multiple.*vendor|more.*vendor|more.*player|introducing new vendor|vehicle placement|new suppliers/i
+      .test(value)
   ) {
     return "Vendor Diversification / Reducing Dependency";
   }
 
-  /* OPERATIONAL ISSUES */
-
-  if (
-    /operation|operational|productivity|process|manpower|visibility|delay in delivery|transportation delay|transportation delays|manage b2c|inefficien|control over operation|process adherence|smooth operation|attrition|re.?vamping|operational challenges|better process management/i.test(
-      value
-    )
-  ) {
-    return "Operational Issues";
-  }
-
-  /* NEW REQUIREMENT / EXPANSION */
-
-  if (
-    /expansion|new requirement|new lane|new start|new launch|new setup|new set-up|new location|new dc|new warehouse|volume increase|volume growth|scaling|increase in demand|increase in volume|production capacity|looking for new scm|looking for a new scm|looking for new supply|new opportunity|requirement|business expansion|growth|additional requirement|new project|new scm|new site|new facility|new service|new product|exploring new geographies|excess volume/i.test(
-      value
-    )
-  ) {
-    return "New Requirement / Expansion";
-  }
 
   /* COST / COMMERCIAL */
 
   if (
-    /cost|commercial|pricing|price|rate|rates|competitive|competative|saving|savings|costing|cost effective|cost reduction|cost optimisation|cost optimization|better price|better pricing|rfq price|better offer|affordable|cost correction/i.test(
-      value
-    )
+    /cost|commercial|pricing|price|rate|rates|competitive|competative|saving|savings|costing|cost effective|cost reduction|cost optimisation|cost optimization|better price|better pricing|rfq price/i
+      .test(value)
   ) {
     return "Cost / Commercial";
   }
 
+
   /* SERVICE QUALITY */
 
   if (
-    /service|serivce|better services|better service|service issue|service issues|service quality|service improvement|poor service|enhance service|service level|customer experience|quality output|service provider|service offering|better process management/i.test(
-      value
-    )
+    /service|better services|better service|service issue|service issues|service quality|service improvement|poor service|enhance service|service level|customer experience/i
+      .test(value)
   ) {
     return "Service Quality";
   }
 
+
+  /* OPERATIONAL ISSUES */
+
+  if (
+    /operation|operational|productivity|process|manpower|visibility|delay in delivery|transportation delay|manage b2c|inefficien|control over operation|process adherence|smooth operation|attrition/i
+      .test(value)
+  ) {
+    return "Operational Issues";
+  }
+
+
+  /* NEW REQUIREMENT / EXPANSION */
+
+  if (
+    /expansion|new requirement|new lane|new start|new launch|new setup|new set-up|new location|new dc|new warehouse|volume increase|volume growth|scaling|increase in demand|production capacity|looking for new scm|looking for a new scm|looking for new supply|new opportunity|requirement|business expansion|growth|additional requirement/i
+      .test(value)
+  ) {
+    return "New Requirement / Expansion";
+  }
+
+
   /* OTHER */
 
   if (
-    /inhouse|temporary requirement|software interface|relationship|bosch global policy|inventory management|warehouse management|primarily focus|to be checked|need efficiency/i.test(
-      value
-    )
+    /inhouse|temporary requirement|software interface|relationship|bosch global policy|inventory management|warehouse management|primarily focus|to be checked/i
+      .test(value)
   ) {
     return "Other / Unclear";
   }
 
+
   return "Other / Unclear";
 }
+
 
 /* =========================================================
    MULTI SELECT
@@ -827,7 +689,11 @@ function MultiSelect({
   selected,
   setSelected,
 }) {
-  const [open, setOpen] = useState(false);
+  const [
+    open,
+    setOpen,
+  ] = useState(false);
+
 
   function toggle(value) {
     if (selected.includes(value)) {
@@ -844,13 +710,16 @@ function MultiSelect({
     }
   }
 
+
   function selectAll() {
     setSelected(values);
   }
 
+
   function clearAll() {
     setSelected([]);
   }
+
 
   const display =
     selected.length === 0
@@ -859,8 +728,10 @@ function MultiSelect({
         ? selected[0]
         : `${selected.length} ${label} selected`;
 
+
   return (
     <div className="relative">
+
       <button
         type="button"
         onClick={() =>
@@ -887,6 +758,7 @@ function MultiSelect({
           focus:border-indigo-400
         "
       >
+
         <span className="truncate">
           {display}
         </span>
@@ -895,12 +767,19 @@ function MultiSelect({
           size={17}
           className="shrink-0 text-slate-400"
         />
+
       </button>
+
 
       {open && (
         <>
+
           <div
-            className="fixed inset-0 z-40"
+            className="
+              fixed
+              inset-0
+              z-40
+            "
             onClick={() =>
               setOpen(false)
             }
@@ -923,6 +802,7 @@ function MultiSelect({
               shadow-2xl
             "
           >
+
             <div
               className="
                 flex
@@ -935,6 +815,7 @@ function MultiSelect({
                 mb-1
               "
             >
+
               <button
                 type="button"
                 onClick={selectAll}
@@ -958,56 +839,69 @@ function MultiSelect({
               >
                 Clear
               </button>
+
             </div>
 
-            {values.map((value) => {
-              const checked =
-                selected.includes(value);
 
-              return (
-                <label
-                  key={value}
-                  className="
-                    flex
-                    cursor-pointer
-                    items-center
-                    gap-3
-                    rounded-lg
-                    px-2
-                    py-2.5
-                    text-sm
-                    text-slate-700
-                    hover:bg-slate-50
-                  "
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      toggle(value)
-                    }
+            {values.map(
+              (value) => {
+
+                const checked =
+                  selected.includes(
+                    value
+                  );
+
+                return (
+                  <label
+                    key={value}
                     className="
-                      h-4
-                      w-4
-                      rounded
-                      border-slate-300
-                      text-indigo-600
-                      focus:ring-indigo-500
+                      flex
+                      cursor-pointer
+                      items-center
+                      gap-3
+                      rounded-lg
+                      px-2
+                      py-2.5
+                      text-sm
+                      text-slate-700
+                      hover:bg-slate-50
                     "
-                  />
+                  >
 
-                  <span className="truncate">
-                    {value}
-                  </span>
-                </label>
-              );
-            })}
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        toggle(value)
+                      }
+                      className="
+                        h-4
+                        w-4
+                        rounded
+                        border-slate-300
+                        text-indigo-600
+                        focus:ring-indigo-500
+                      "
+                    />
+
+                    <span className="truncate">
+                      {value}
+                    </span>
+
+                  </label>
+                );
+              }
+            )}
+
           </div>
+
         </>
       )}
+
     </div>
   );
 }
+
 
 /* =========================================================
    CHART SLIDER
@@ -1015,7 +909,7 @@ function MultiSelect({
 
 function ChartSlider({
   total,
-  visible = 6,
+  visible,
   start,
   setStart,
 }) {
@@ -1038,6 +932,7 @@ function ChartSlider({
         px-2
       "
     >
+
       <span
         className="
           text-[11px]
@@ -1059,7 +954,9 @@ function ChartSlider({
         )}
         onChange={(e) =>
           setStart(
-            Number(e.target.value)
+            Number(
+              e.target.value
+            )
           )
         }
         className="
@@ -1087,9 +984,11 @@ function ChartSlider({
         )}
         /{total}
       </span>
+
     </div>
   );
 }
+
 
 /* =========================================================
    CHART LABELS
@@ -1100,7 +999,6 @@ function CountLabel({
   y,
   width,
   value,
-  position = "top",
 }) {
   if (
     value === null ||
@@ -1109,28 +1007,13 @@ function CountLabel({
     return null;
   }
 
-  if (position === "right") {
-    return (
-      <text
-        x={x + width + 7}
-        y={y + 4}
-        textAnchor="start"
-        fill="#475569"
-        fontSize={10}
-        fontWeight={700}
-      >
-        {formatInt(value)}
-      </text>
-    );
-  }
-
   return (
     <text
       x={x + width / 2}
-      y={y - 7}
+      y={y - 8}
       textAnchor="middle"
       fill="#475569"
-      fontSize={10}
+      fontSize={11}
       fontWeight={700}
     >
       {formatInt(value)}
@@ -1138,12 +1021,12 @@ function CountLabel({
   );
 }
 
+
 function ValueLabel({
   x,
   y,
   width,
   value,
-  position = "top",
 }) {
   if (
     value === null ||
@@ -1152,34 +1035,80 @@ function ValueLabel({
     return null;
   }
 
-  if (position === "right") {
-    return (
-      <text
-        x={x + width + 7}
-        y={y + 4}
-        textAnchor="start"
-        fill="#475569"
-        fontSize={10}
-        fontWeight={700}
-      >
-        {formatCr(value)}
-      </text>
-    );
-  }
-
   return (
     <text
       x={x + width / 2}
-      y={y - 7}
+      y={y - 8}
       textAnchor="middle"
       fill="#475569"
-      fontSize={10}
+      fontSize={11}
       fontWeight={700}
     >
       {formatCr(value)}
     </text>
   );
 }
+
+
+/*
+ * Horizontal-bar label.
+ * Used for services if required.
+ */
+function HorizontalCountLabel({
+  x,
+  y,
+  width,
+  height,
+  value,
+}) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  return (
+    <text
+      x={x + width + 8}
+      y={y + height / 2 + 4}
+      fill="#475569"
+      fontSize={11}
+      fontWeight={700}
+    >
+      {formatInt(value)}
+    </text>
+  );
+}
+
+
+function HorizontalValueLabel({
+  x,
+  y,
+  width,
+  height,
+  value,
+}) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  return (
+    <text
+      x={x + width + 8}
+      y={y + height / 2 + 4}
+      fill="#475569"
+      fontSize={11}
+      fontWeight={700}
+    >
+      {formatCr(value)}
+    </text>
+  );
+}
+
 
 /* =========================================================
    TOOLTIP
@@ -1209,6 +1138,7 @@ function CustomTooltip({
         shadow-xl
       "
     >
+
       <div
         className="
           mb-2
@@ -1220,63 +1150,84 @@ function CustomTooltip({
         {label}
       </div>
 
-      {payload.map((p, i) => {
-        const name = String(
-          p.name || ""
-        );
+      {payload.map(
+        (p, i) => {
 
-        const isValue =
-          name
-            .toLowerCase()
-            .includes("value");
+          const name =
+            String(
+              p.name || ""
+            );
 
-        return (
-          <div
-            key={i}
-            className="
-              text-sm
-              font-semibold
-              text-slate-800
-            "
-          >
-            {name}:{" "}
-            {isValue
-              ? formatCr(p.value)
-              : formatInt(p.value)}
-          </div>
-        );
-      })}
+          const isValue =
+            name
+              .toLowerCase()
+              .includes("value");
+
+          return (
+            <div
+              key={i}
+              className="
+                text-sm
+                font-semibold
+                text-slate-800
+              "
+            >
+              {name}:{" "}
+
+              {isValue
+                ? formatCr(p.value)
+                : formatInt(p.value)}
+            </div>
+          );
+        }
+      )}
+
     </div>
   );
 }
+
 
 /* =========================================================
    AGGREGATION
 ========================================================= */
 
-function aggregate(rows, getter) {
+function aggregate(
+  rows,
+  getter
+) {
   const map = new Map();
 
   rows.forEach((row) => {
+
     const key =
-      getter(row) || "Unknown";
+      getter(row) ||
+      "Unknown";
 
     if (!map.has(key)) {
-      map.set(key, {
-        name: key,
-        count: 0,
-        value: 0,
-      });
+      map.set(
+        key,
+        {
+          name: key,
+          count: 0,
+          value: 0,
+        }
+      );
     }
 
-    const item = map.get(key);
+    const item =
+      map.get(key);
 
     item.count += 1;
-    item.value += getValue(row);
+
+    item.value +=
+      getValue(row);
   });
 
-  return [...map.values()];
+  return [
+    ...map.values(),
+  ];
 }
+
 
 /* =========================================================
    COMPONENT
@@ -1286,48 +1237,63 @@ export default function WonAnalysis({
   data,
   settings = {},
 }) {
+
   /* =======================================================
-     SOURCE
+     WON OPPORTUNITIES SOURCE
   ======================================================= */
 
   const rows = useMemo(() => {
-    const source = Array.isArray(
-      data?.opportunities
-    )
-      ? data.opportunities
-      : Array.isArray(
-          data?.processed?.opportunities
-        )
-        ? data.processed.opportunities
+
+    const source =
+      Array.isArray(
+        data?.opportunities
+      )
+        ? data.opportunities
         : [];
 
-    return source.filter((row) => {
-      const stage = text(
-        row?.["Opportunity Stage"]
-      ).toLowerCase();
+    return source.filter(
+      (row) => {
 
-      const outcome = text(
-        row?.["Outcome bucket"] ||
-          row?.["Outcome Bucket"]
-      ).toLowerCase();
+        const stage =
+          text(
+            row?.[
+              "Opportunity Stage"
+            ]
+          ).toLowerCase();
 
-      const dateWon = getWonDate(row);
+        const outcome =
+          text(
+            row?.[
+              "Outcome bucket"
+            ] ||
+            row?.[
+              "Outcome Bucket"
+            ]
+          ).toLowerCase();
 
-      return (
-        outcome === "won" ||
-        outcome.includes("won") ||
-        stage === "won" ||
-        !!dateWon
-      );
-    });
+        const dateWon =
+          getWonDate(row);
+
+        return (
+          outcome === "won" ||
+          outcome.includes("won") ||
+          stage === "won" ||
+          !!dateWon
+        );
+      }
+    );
+
   }, [data]);
+
 
   /* =======================================================
      FILTER STATE
   ======================================================= */
 
-  const [search, setSearch] =
-    useState("");
+  const [
+    search,
+    setSearch,
+  ] = useState("");
 
   const [
     selectedWeeks,
@@ -1360,11 +1326,6 @@ export default function WonAnalysis({
   ] = useState([]);
 
   const [
-    selectedIndustries,
-    setSelectedIndustries,
-  ] = useState([]);
-
-  const [
     selectedRegions,
     setSelectedRegions,
   ] = useState([]);
@@ -1384,108 +1345,205 @@ export default function WonAnalysis({
     setSelectedServices,
   ] = useState([]);
 
+
   /* =======================================================
      FILTER OPTIONS
   ======================================================= */
 
   const options = useMemo(() => {
-    const unique = (getter) => [
-      ...new Set(
-        rows
-          .map(getter)
-          .filter(Boolean)
-      ),
-    ];
+
+    const unique =
+      (getter) =>
+        [
+          ...new Set(
+            rows
+              .map(getter)
+              .filter(Boolean)
+          ),
+        ].sort(
+          (a, b) =>
+            String(a).localeCompare(
+              String(b)
+            )
+        );
+
+
+    /*
+     * Time filters are sorted descending.
+     */
+
+    const weeks = unique(
+      getOpportunityWeek
+    ).sort((a, b) => {
+
+      if (
+        a === "Unknown"
+      ) return 1;
+
+      if (
+        b === "Unknown"
+      ) return -1;
+
+      const yearA =
+        Number(
+          a.match(/\d{4}/)?.[0]
+        );
+
+      const weekA =
+        Number(
+          a.match(
+            /Week\s*(\d+)/
+          )?.[1]
+        );
+
+      const yearB =
+        Number(
+          b.match(/\d{4}/)?.[0]
+        );
+
+      const weekB =
+        Number(
+          b.match(
+            /Week\s*(\d+)/
+          )?.[1]
+        );
+
+      return (
+        yearB - yearA ||
+        weekB - weekA
+      );
+    });
+
+
+    const months = unique(
+      getOpportunityMonth
+    ).sort((a, b) => {
+
+      const da =
+        new Date(a);
+
+      const db =
+        new Date(b);
+
+      return db - da;
+    });
+
+
+    const years = unique(
+      getWonYear
+    ).sort((a, b) => {
+
+      if (a === "Unknown") return 1;
+      if (b === "Unknown") return -1;
+
+      return Number(b) - Number(a);
+    });
+
+
+    const quarters = unique(
+      getFiscalQuarter
+    ).sort((a, b) => {
+
+      if (a === "Unknown") return 1;
+      if (b === "Unknown") return -1;
+
+      const yearA =
+        Number(
+          a.match(/\d{4}/)?.[0]
+        );
+
+      const qA =
+        Number(
+          a.match(/Q(\d)/)?.[1]
+        );
+
+      const yearB =
+        Number(
+          b.match(/\d{4}/)?.[0]
+        );
+
+      const qB =
+        Number(
+          b.match(/Q(\d)/)?.[1]
+        );
+
+      return (
+        yearB - yearA ||
+        qB - qA
+      );
+    });
+
 
     return {
-      weeks: sortDescending(
-        unique(getOpportunityWeek),
-        "week"
-      ),
 
-      months: sortDescending(
-        unique(getOpportunityMonth),
-        "month"
-      ),
+      weeks,
 
-      years: sortDescending(
-        unique(getCreatedYear),
-        "year"
-      ),
+      months,
 
-      quarters: sortDescending(
-        unique(getFiscalQuarter),
-        "quarter"
-      ),
+      years,
 
-      owners: unique(getOwner).sort(
-        (a, b) =>
-          String(a).localeCompare(
-            String(b)
-          )
-      ),
+      quarters,
 
-      pcs: unique(
-        getPCSVertical
-      ).sort((a, b) =>
-        String(a).localeCompare(
-          String(b)
-        )
-      ),
+      owners:
+        unique(getOwner),
 
-      industries: unique(
-        getIndustry
-      ).sort((a, b) =>
-        String(a).localeCompare(
-          String(b)
-        )
-      ),
+      pcs:
+        unique(getPCSVertical),
 
-      regions: [
-        "North",
-        "South",
-        "East",
-        "West",
-        "Pan India",
-        "Multiple Locations",
-        "Unknown",
-      ].filter((region) =>
-        rows.some(
-          (row) =>
-            getStandardizedRegion(
-              row
-            ) === region
-        )
-      ),
-
-      dealSizes: unique(
-        getDealSize
-      ).sort((a, b) =>
-        String(a).localeCompare(
-          String(b)
-        )
-      ),
-
-      reasons:
-        WIN_REASON_CATEGORIES.filter(
-          (reason) =>
+      regions:
+        [
+          "North",
+          "South",
+          "East",
+          "West",
+          "Pan India",
+          "Multiple Locations",
+        ].filter(
+          (region) =>
             rows.some(
               (row) =>
-                standardizeWinReason(
+                getStandardizedRegion(
                   row
-                ) === reason
+                ) === region
             )
         ),
 
-      services: unique(
-        getService
-      ).sort((a, b) =>
-        String(a).localeCompare(
-          String(b)
-        )
-      ),
+      /*
+       * Deal Size filter is now
+       * standardized into the
+       * requested bandwidths.
+       */
+      dealSizes:
+        DEAL_SIZE_BANDS
+          .map(
+            (band) =>
+              band.name
+          )
+          .filter(
+            (band) =>
+              rows.some(
+                (row) =>
+                  getDealSize(row) ===
+                  band
+              )
+          ),
+
+      reasons:
+        unique(
+          standardizeWinReason
+        ),
+
+      /*
+       * Services filter now uses
+       * Services Required.
+       */
+      services:
+        unique(getService),
+
     };
+
   }, [rows]);
+
 
   /* =======================================================
      FILTER MATCH
@@ -1501,90 +1559,109 @@ export default function WonAnalysis({
     );
   }
 
+
   /* =======================================================
      FILTERED DATA
   ======================================================= */
 
   const filtered = useMemo(() => {
-    const q = search
-      .trim()
-      .toLowerCase();
 
-    return rows.filter((row) => {
-      const haystack = [
-        row?.["Opportunity Name"],
-        row?.["Customer name"],
-        row?.["Opportunity ID"],
-        getOwner(row),
-        getPCSVertical(row),
-        getIndustry(row),
-        getStandardizedRegion(row),
-        standardizeWinReason(row),
-        getService(row),
-      ]
-        .map(text)
-        .join(" ")
+    const q =
+      search
+        .trim()
         .toLowerCase();
 
-      return (
-        (!q || haystack.includes(q)) &&
 
-        matches(
-          selectedWeeks,
-          getOpportunityWeek(row)
-        ) &&
+    return rows.filter(
+      (row) => {
 
-        matches(
-          selectedMonths,
-          getOpportunityMonth(row)
-        ) &&
+        const haystack = [
 
-        matches(
-          selectedYears,
-          getCreatedYear(row)
-        ) &&
+          row?.[
+            "Opportunity Name"
+          ],
 
-        matches(
-          selectedQuarters,
-          getFiscalQuarter(row)
-        ) &&
+          row?.[
+            "Customer name"
+          ],
 
-        matches(
-          selectedOwners,
-          getOwner(row)
-        ) &&
+          getOwner(row),
 
-        matches(
-          selectedPCS,
-          getPCSVertical(row)
-        ) &&
+          getPCSVertical(row),
 
-        matches(
-          selectedIndustries,
-          getIndustry(row)
-        ) &&
+          getStandardizedRegion(row),
 
-        matches(
-          selectedRegions,
-          getStandardizedRegion(row)
-        ) &&
+          standardizeWinReason(row),
 
-        matches(
-          selectedDealSizes,
-          getDealSize(row)
-        ) &&
+          getService(row),
 
-        matches(
-          selectedReasons,
-          standardizeWinReason(row)
-        ) &&
+        ]
+          .map(text)
+          .join(" ")
+          .toLowerCase();
 
-        matches(
-          selectedServices,
-          getService(row)
-        )
-      );
-    });
+
+        return (
+
+          (
+            !q ||
+            haystack.includes(q)
+          )
+
+          && matches(
+            selectedWeeks,
+            getOpportunityWeek(row)
+          )
+
+          && matches(
+            selectedMonths,
+            getOpportunityMonth(row)
+          )
+
+          && matches(
+            selectedYears,
+            getWonYear(row)
+          )
+
+          && matches(
+            selectedQuarters,
+            getFiscalQuarter(row)
+          )
+
+          && matches(
+            selectedOwners,
+            getOwner(row)
+          )
+
+          && matches(
+            selectedPCS,
+            getPCSVertical(row)
+          )
+
+          && matches(
+            selectedRegions,
+            getStandardizedRegion(row)
+          )
+
+          && matches(
+            selectedDealSizes,
+            getDealSize(row)
+          )
+
+          && matches(
+            selectedReasons,
+            standardizeWinReason(row)
+          )
+
+          && matches(
+            selectedServices,
+            getService(row)
+          )
+
+        );
+      }
+    );
+
   }, [
     rows,
     search,
@@ -1594,26 +1671,33 @@ export default function WonAnalysis({
     selectedQuarters,
     selectedOwners,
     selectedPCS,
-    selectedIndustries,
     selectedRegions,
     selectedDealSizes,
     selectedReasons,
     selectedServices,
   ]);
 
+
   /* =======================================================
      KPIs
   ======================================================= */
 
   const metrics = useMemo(() => {
-    const values = filtered
-      .map(getValue)
-      .sort((a, b) => a - b);
 
-    const total = values.reduce(
-      (a, b) => a + b,
-      0
-    );
+    const values =
+      filtered
+        .map(getValue)
+        .sort(
+          (a, b) => a - b
+        );
+
+
+    const total =
+      values.reduce(
+        (a, b) => a + b,
+        0
+      );
+
 
     const median =
       values.length === 0
@@ -1631,22 +1715,29 @@ export default function WonAnalysis({
               ]
             ) / 2;
 
-    const reasons = aggregate(
-      filtered,
-      standardizeWinReason
-    ).sort(
-      (a, b) =>
-        b.count - a.count
-    );
+
+    const reasons =
+      aggregate(
+        filtered,
+        standardizeWinReason
+      ).sort(
+        (a, b) =>
+          b.count - a.count
+      );
+
 
     return {
-      count: filtered.length,
+
+      count:
+        filtered.length,
 
       total,
 
-      average: filtered.length
-        ? total / filtered.length
-        : 0,
+      average:
+        filtered.length
+          ? total /
+            filtered.length
+          : 0,
 
       highest:
         values[
@@ -1656,220 +1747,233 @@ export default function WonAnalysis({
       median,
 
       topReason:
-        reasons[0]?.name || "—",
+        reasons[0]?.name ||
+        "—",
 
       topReasonShare:
         filtered.length
-          ? (reasons[0]?.count || 0) /
+          ? (
+              reasons[0]?.count ||
+              0
+            ) /
             filtered.length
           : 0,
 
       years:
         new Set(
-          filtered.map(getWonYear)
+          filtered.map(
+            getWonYear
+          )
         ).size,
+
     };
+
   }, [filtered]);
 
+
   /* =======================================================
-     VALUE DISTRIBUTION
+     WIN BY DEAL SIZE
   ======================================================= */
 
-  const valueDistribution =
-    useMemo(() => {
-      const bands = [
-        {
-          name: "0–1 Cr",
-          min: 0,
-          max: 1,
-        },
-        {
-          name: "1–5 Cr",
-          min: 1,
-          max: 5,
-        },
-        {
-          name: "5–10 Cr",
-          min: 5,
-          max: 10,
-        },
-        {
-          name: "10–15 Cr",
-          min: 10,
-          max: 15,
-        },
-        {
-          name: "15–20 Cr",
-          min: 15,
-          max: 20,
-        },
-        {
-          name: ">20 Cr",
-          min: 20,
-          max: Infinity,
-        },
-      ];
+  const dealSizeData = useMemo(() => {
 
-      return bands.map((band) => {
+    return DEAL_SIZE_BANDS.map(
+      (band) => {
+
         const matching =
-          filtered.filter((row) => {
-            const value =
-              getValue(row);
+          filtered.filter(
+            (row) =>
+              getValue(row) >=
+                band.min &&
+              getValue(row) <
+                band.max
+          );
 
-            return (
-              value >= band.min &&
-              value < band.max
-            );
-          });
 
         return {
-          name: band.name,
 
-          count: matching.length,
+          name:
+            band.name,
 
-          value: matching.reduce(
-            (total, row) =>
-              total + getValue(row),
-            0
-          ),
+          count:
+            matching.length,
+
+          value:
+            matching.reduce(
+              (
+                total,
+                row
+              ) =>
+                total +
+                getValue(row),
+              0
+            ),
+
         };
-      });
-    }, [filtered]);
+      }
+    );
+
+  }, [filtered]);
+
 
   /* =======================================================
      OTHER CHART DATA
   ======================================================= */
 
-  const reasonData = useMemo(
-    () =>
-      aggregate(
-        filtered,
-        standardizeWinReason
-      ).sort(
-        (a, b) =>
-          b.value - a.value
-      ),
-    [filtered]
-  );
+  const reasonData =
+    useMemo(
+      () =>
+        aggregate(
+          filtered,
+          standardizeWinReason
+        ).sort(
+          (a, b) =>
+            b.value - a.value
+        ),
+      [filtered]
+    );
 
-  const industryData = useMemo(
-    () =>
-      aggregate(
-        filtered,
-        getIndustry
-      ).sort(
-        (a, b) =>
-          b.value - a.value
-      ),
-    [filtered]
-  );
 
-  const regionData = useMemo(
-    () =>
-      [
-        "North",
-        "South",
-        "East",
-        "West",
-        "Pan India",
-        "Multiple Locations",
-      ].map((name) => {
-        const matching =
-          filtered.filter(
-            (row) =>
-              getStandardizedRegion(
-                row
-              ) === name
-          );
+  const pcsData =
+    useMemo(
+      () =>
+        aggregate(
+          filtered,
+          getPCSVertical
+        ).sort(
+          (a, b) =>
+            b.value - a.value
+        ),
+      [filtered]
+    );
 
-        return {
-          name,
-          count: matching.length,
-          value: matching.reduce(
-            (total, row) =>
-              total + getValue(row),
-            0
-          ),
-        };
-      }),
-    [filtered]
-  );
 
-  const pcsData = useMemo(
-    () =>
-      aggregate(
-        filtered,
-        getPCSVertical
-      ).sort(
-        (a, b) =>
-          b.value - a.value
-      ),
-    [filtered]
-  );
+  const regionData =
+    useMemo(
+      () =>
+        [
+          "North",
+          "South",
+          "East",
+          "West",
+          "Pan India",
+          "Multiple Locations",
+        ].map(
+          (name) => {
 
-  const dealData = useMemo(
-    () =>
-      aggregate(
-        filtered,
-        getDealSize
-      ).sort(
-        (a, b) =>
-          b.value - a.value
-      ),
-    [filtered]
-  );
+            const matching =
+              filtered.filter(
+                (row) =>
+                  getStandardizedRegion(
+                    row
+                  ) === name
+              );
 
-  const serviceData = useMemo(
-    () =>
-      aggregate(
-        filtered,
-        getService
-      ).sort(
-        (a, b) =>
-          b.value - a.value
-      ),
-    [filtered]
-  );
+
+            return {
+
+              name,
+
+              count:
+                matching.length,
+
+              value:
+                matching.reduce(
+                  (
+                    total,
+                    row
+                  ) =>
+                    total +
+                    getValue(row),
+                  0
+                ),
+
+            };
+
+          }
+        ),
+      [filtered]
+    );
+
+
+  const serviceData =
+    useMemo(
+      () =>
+        aggregate(
+          filtered,
+          getService
+        ).sort(
+          (a, b) =>
+            b.value - a.value
+        ),
+      [filtered]
+    );
+
 
   /* =======================================================
      YEARLY DATA
   ======================================================= */
 
-  const yearly = useMemo(() => {
-    const map = new Map();
+  const yearly =
+    useMemo(() => {
 
-    filtered.forEach((row) => {
-      const year =
-        getWonYear(row);
+      const map =
+        new Map();
 
-      if (!map.has(year)) {
-        map.set(year, {
-          year,
-          count: 0,
-          value: 0,
-        });
-      }
 
-      const item = map.get(year);
+      filtered.forEach(
+        (row) => {
 
-      item.count += 1;
-      item.value += getValue(row);
-    });
+          const year =
+            getWonYear(row);
 
-    return [...map.values()]
-      .filter(
-        (x) =>
-          x.year !== "Unknown"
-      )
-      .sort(
-        (a, b) =>
-          Number(a.year) -
-          Number(b.year)
+
+          if (!map.has(year)) {
+
+            map.set(
+              year,
+              {
+                year,
+                count: 0,
+                value: 0,
+              }
+            );
+
+          }
+
+
+          const item =
+            map.get(year);
+
+
+          item.count += 1;
+
+          item.value +=
+            getValue(row);
+
+        }
       );
-  }, [filtered]);
+
+
+      return [
+        ...map.values(),
+      ]
+        .filter(
+          (x) =>
+            x.year !==
+            "Unknown"
+        )
+        .sort(
+          (a, b) =>
+            Number(a.year) -
+            Number(b.year)
+        );
+
+    }, [filtered]);
+
 
   /* =======================================================
-     SLIDER STATE
+     SLIDERS
   ======================================================= */
 
   const [
@@ -1877,34 +1981,18 @@ export default function WonAnalysis({
     setReasonStart,
   ] = useState(0);
 
-  const [
-    industryStart,
-    setIndustryStart,
-  ] = useState(0);
 
   const [
     pcsStart,
     setPCSStart,
   ] = useState(0);
 
+
   const [
     serviceStart,
     setServiceStart,
   ] = useState(0);
 
-  const [
-    dealStart,
-    setDealStart,
-  ] = useState(0);
-
-  const [
-    yearlyStart,
-    setYearlyStart,
-  ] = useState(0);
-
-  /* =======================================================
-     VISIBLE CHART DATA
-  ======================================================= */
 
   const visibleReasons =
     reasonData.slice(
@@ -1912,11 +2000,6 @@ export default function WonAnalysis({
       reasonStart + 6
     );
 
-  const visibleIndustries =
-    industryData.slice(
-      industryStart,
-      industryStart + 6
-    );
 
   const visiblePCS =
     pcsData.slice(
@@ -1924,26 +2007,16 @@ export default function WonAnalysis({
       pcsStart + 6
     );
 
+
   const visibleServices =
     serviceData.slice(
       serviceStart,
       serviceStart + 6
     );
 
-  const visibleDeals =
-    dealData.slice(
-      dealStart,
-      dealStart + 6
-    );
-
-  const visibleYearly =
-    yearly.slice(
-      yearlyStart,
-      yearlyStart + 6
-    );
 
   /* =======================================================
-     FILTER RESET
+     RESET
   ======================================================= */
 
   const activeFilterCount =
@@ -1954,46 +2027,64 @@ export default function WonAnalysis({
       selectedQuarters,
       selectedOwners,
       selectedPCS,
-      selectedIndustries,
       selectedRegions,
       selectedDealSizes,
       selectedReasons,
       selectedServices,
     ].reduce(
-      (total, arr) =>
+      (
+        total,
+        arr
+      ) =>
         total + arr.length,
       0
-    ) + (search ? 1 : 0);
+    ) +
+    (
+      search
+        ? 1
+        : 0
+    );
+
 
   function clearFilters() {
+
     setSearch("");
 
     setSelectedWeeks([]);
+
     setSelectedMonths([]);
+
     setSelectedYears([]);
+
     setSelectedQuarters([]);
+
     setSelectedOwners([]);
+
     setSelectedPCS([]);
-    setSelectedIndustries([]);
+
     setSelectedRegions([]);
+
     setSelectedDealSizes([]);
+
     setSelectedReasons([]);
+
     setSelectedServices([]);
 
-    setReasonStart(0);
-    setIndustryStart(0);
-    setPCSStart(0);
-    setServiceStart(0);
-    setDealStart(0);
-    setYearlyStart(0);
   }
+
 
   /* =======================================================
      RENDER
   ======================================================= */
 
   return (
-    <div className="space-y-7 pb-10">
+
+    <div
+      className="
+        space-y-7
+        pb-10
+      "
+    >
 
       <SectionHeader
         title="Won Analysis"
@@ -2001,6 +2092,7 @@ export default function WonAnalysis({
           Analysis of won opportunities based directly on the Opportunities dataset
         "
       />
+
 
       {/* ===================================================
           FILTERS
@@ -2016,6 +2108,7 @@ export default function WonAnalysis({
           shadow-sm
         "
       >
+
         <div
           className="
             grid
@@ -2028,13 +2121,20 @@ export default function WonAnalysis({
 
           {/* SEARCH */}
 
-          <div className="relative">
+          <div
+            className="
+              relative
+              flex
+              items-center
+            "
+          >
+
             <Search
-              size={17}
+              size={19}
               className="
                 pointer-events-none
                 absolute
-                left-3
+                left-4
                 top-1/2
                 -translate-y-1/2
                 text-slate-400
@@ -2056,139 +2156,112 @@ export default function WonAnalysis({
                 border
                 border-slate-200
                 bg-white
-                pl-10
+                pl-11
                 pr-3
-                py-0
                 text-sm
                 font-medium
-                leading-normal
+                leading-[52px]
                 text-slate-700
                 outline-none
                 placeholder:text-slate-400
                 focus:border-indigo-400
               "
             />
+
           </div>
+
 
           <MultiSelect
             label="Weeks"
             values={options.weeks}
             selected={selectedWeeks}
-            setSelected={
-              setSelectedWeeks
-            }
+            setSelected={setSelectedWeeks}
           />
+
 
           <MultiSelect
             label="Months"
             values={options.months}
             selected={selectedMonths}
-            setSelected={
-              setSelectedMonths
-            }
+            setSelected={setSelectedMonths}
           />
+
 
           <MultiSelect
             label="Years"
             values={options.years}
             selected={selectedYears}
-            setSelected={
-              setSelectedYears
-            }
+            setSelected={setSelectedYears}
           />
+
 
           <MultiSelect
             label="Fiscal Quarters"
             values={options.quarters}
-            selected={
-              selectedQuarters
-            }
-            setSelected={
-              setSelectedQuarters
-            }
+            selected={selectedQuarters}
+            setSelected={setSelectedQuarters}
           />
+
 
           <MultiSelect
             label="Owners"
             values={options.owners}
             selected={selectedOwners}
-            setSelected={
-              setSelectedOwners
-            }
+            setSelected={setSelectedOwners}
           />
+
+
+          {/* PCS VERTICAL */}
 
           <MultiSelect
             label="PCS Verticals"
             values={options.pcs}
             selected={selectedPCS}
-            setSelected={
-              setSelectedPCS
-            }
+            setSelected={setSelectedPCS}
           />
 
-          <MultiSelect
-            label="Industries"
-            values={
-              options.industries
-            }
-            selected={
-              selectedIndustries
-            }
-            setSelected={
-              setSelectedIndustries
-            }
-          />
+
+          {/* REGION */}
 
           <MultiSelect
             label="Regions"
             values={options.regions}
-            selected={
-              selectedRegions
-            }
-            setSelected={
-              setSelectedRegions
-            }
+            selected={selectedRegions}
+            setSelected={setSelectedRegions}
           />
+
+
+          {/* DEAL SIZE */}
 
           <MultiSelect
             label="Deal Sizes"
-            values={
-              options.dealSizes
-            }
-            selected={
-              selectedDealSizes
-            }
-            setSelected={
-              setSelectedDealSizes
-            }
+            values={options.dealSizes}
+            selected={selectedDealSizes}
+            setSelected={setSelectedDealSizes}
           />
+
+
+          {/* WIN REASON */}
 
           <MultiSelect
             label="Win Reasons"
-            values={
-              options.reasons
-            }
-            selected={
-              selectedReasons
-            }
-            setSelected={
-              setSelectedReasons
-            }
+            values={options.reasons}
+            selected={selectedReasons}
+            setSelected={setSelectedReasons}
           />
+
+
+          {/* SERVICES */}
 
           <MultiSelect
             label="Services"
-            values={
-              options.services
-            }
-            selected={
-              selectedServices
-            }
-            setSelected={
-              setSelectedServices
-            }
+            values={options.services}
+            selected={selectedServices}
+            setSelected={setSelectedServices}
           />
+
         </div>
+
 
         <div
           className="
@@ -2198,6 +2271,7 @@ export default function WonAnalysis({
             justify-between
           "
         >
+
           <span
             className="
               text-xs
@@ -2212,8 +2286,11 @@ export default function WonAnalysis({
             won opportunities
           </span>
 
+
           {activeFilterCount > 0 && (
+
             <button
+              type="button"
               onClick={
                 clearFilters
               }
@@ -2230,12 +2307,19 @@ export default function WonAnalysis({
                 hover:bg-slate-100
               "
             >
+
               <X size={13} />
+
               Clear filters
+
             </button>
+
           )}
+
         </div>
+
       </div>
+
 
       {/* ===================================================
           KPIs
@@ -2250,104 +2334,94 @@ export default function WonAnalysis({
           xl:grid-cols-4
         "
       >
+
         <KPI
           title="Total Deals Won"
-          value={formatInt(
-            metrics.count
-          )}
+          value={formatInt(metrics.count)}
           icon={Trophy}
         />
 
         <KPI
           title="Total Value Won"
-          value={formatCr(
-            metrics.total
-          )}
+          value={formatCr(metrics.total)}
           icon={IndianRupee}
         />
 
         <KPI
           title="Avg Won Deal Size"
-          value={formatCr(
-            metrics.average
-          )}
+          value={formatCr(metrics.average)}
           icon={Target}
         />
 
         <KPI
           title="Highest Value Won"
-          value={formatCr(
-            metrics.highest
-          )}
+          value={formatCr(metrics.highest)}
           icon={TrendingUp}
         />
 
         <KPI
           title="Median Deal Size"
-          value={formatCr(
-            metrics.median
-          )}
+          value={formatCr(metrics.median)}
           icon={IndianRupee}
         />
 
         <KPI
           title="Top Win Reason"
-          value={
-            metrics.topReason
-          }
+          value={metrics.topReason}
           icon={Trophy}
         />
 
         <KPI
           title="Top Reason Share"
-          value={formatPct(
-            metrics.topReasonShare
-          )}
+          value={formatPct(metrics.topReasonShare)}
           icon={Users}
         />
 
         <KPI
           title="Won Years Covered"
-          value={formatInt(
-            metrics.years
-          )}
+          value={formatInt(metrics.years)}
           icon={CalendarDays}
         />
+
       </div>
 
+
       {/* ===================================================
-          VALUE DISTRIBUTION
+          WIN BY DEAL SIZE
       =================================================== */}
 
       <SectionHeader
-        title="Opportunity Value Distribution"
+        title="Win by Deal Size"
         subtitle="
-          Number of won opportunities and total won value by value band
+          Number of won opportunities and total won value by deal-size band
         "
       />
 
+
       <ChartCard
-        title="Opportunity Value Distribution"
+        title="Win by Deal Size"
         subtitle="
           Won opportunities grouped using values in Crores
         "
       >
+
         <div className="h-[430px]">
+
           <ResponsiveContainer
             width="100%"
             height="100%"
           >
+
             <BarChart
-              data={
-                valueDistribution
-              }
+              data={dealSizeData}
               margin={{
                 top: 40,
-                right: 45,
+                right: 30,
                 left: 15,
                 bottom: 25,
               }}
             >
+
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
@@ -2360,17 +2434,6 @@ export default function WonAnalysis({
               />
 
               <YAxis
-                yAxisId="value"
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) =>
-                  `${v} Cr`
-                }
-              />
-
-              <YAxis
-                yAxisId="count"
-                orientation="right"
                 axisLine={false}
                 tickLine={false}
               />
@@ -2384,7 +2447,6 @@ export default function WonAnalysis({
               <Legend />
 
               <Bar
-                yAxisId="count"
                 dataKey="count"
                 name="Opportunities"
                 fill="#6366f1"
@@ -2395,17 +2457,17 @@ export default function WonAnalysis({
                   0,
                 ]}
               >
+
                 <LabelList
-                  content={(props) => (
-                    <CountLabel
-                      {...props}
-                    />
-                  )}
+                  content={
+                    <CountLabel />
+                  }
                 />
+
               </Bar>
 
+
               <Bar
-                yAxisId="value"
                 dataKey="value"
                 name="Total Value"
                 fill="#14b8a6"
@@ -2416,18 +2478,23 @@ export default function WonAnalysis({
                   0,
                 ]}
               >
+
                 <LabelList
-                  content={(props) => (
-                    <ValueLabel
-                      {...props}
-                    />
-                  )}
+                  content={
+                    <ValueLabel />
+                  }
                 />
+
               </Bar>
+
             </BarChart>
+
           </ResponsiveContainer>
+
         </div>
+
       </ChartCard>
+
 
       {/* ===================================================
           WIN DRIVERS
@@ -2440,6 +2507,7 @@ export default function WonAnalysis({
         "
       />
 
+
       <div
         className="
           grid
@@ -2449,51 +2517,57 @@ export default function WonAnalysis({
         "
       >
 
-        {/* WIN REASON */}
+        {/* =================================================
+            INCUMBENT CHANGE REASON
+        ================================================= */}
 
         <ChartCard
           title="Incumbent Change Reason"
           subtitle="
-            Standardized won-deal reason and value
+            Standardized win reasons and won value
           "
         >
+
           <div className="h-[430px]">
+
             <ResponsiveContainer
               width="100%"
               height="100%"
             >
+
               <BarChart
-                data={
-                  visibleReasons
-                }
-                layout="vertical"
+                data={visibleReasons}
                 margin={{
-                  top: 20,
-                  right: 95,
-                  left: 175,
-                  bottom: 20,
+                  top: 45,
+                  right: 25,
+                  left: 15,
+                  bottom: 115,
                 }}
               >
+
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  horizontal={false}
+                  vertical={false}
                 />
+
+                {/* WIN REASONS ARE NOW ON X AXIS */}
 
                 <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <YAxis
-                  type="category"
                   dataKey="name"
-                  width={165}
+                  interval={0}
+                  angle={-32}
+                  textAnchor="end"
+                  height={115}
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fontSize: 11,
+                    fontSize: 10,
                   }}
+                />
+
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                 />
 
                 <Tooltip
@@ -2509,45 +2583,48 @@ export default function WonAnalysis({
                   name="Count"
                   fill="#6366f1"
                   radius={[
+                    6,
+                    6,
                     0,
-                    6,
-                    6,
                     0,
                   ]}
                 >
+
                   <LabelList
-                    content={(props) => (
-                      <CountLabel
-                        {...props}
-                        position="right"
-                      />
-                    )}
+                    content={
+                      <CountLabel />
+                    }
                   />
+
                 </Bar>
+
 
                 <Bar
                   dataKey="value"
                   name="Value"
                   fill="#14b8a6"
                   radius={[
+                    6,
+                    6,
                     0,
-                    6,
-                    6,
                     0,
                   ]}
                 >
+
                   <LabelList
-                    content={(props) => (
-                      <ValueLabel
-                        {...props}
-                        position="right"
-                      />
-                    )}
+                    content={
+                      <ValueLabel />
+                    }
                   />
+
                 </Bar>
+
               </BarChart>
+
             </ResponsiveContainer>
+
           </div>
+
 
           <ChartSlider
             total={
@@ -2555,36 +2632,40 @@ export default function WonAnalysis({
             }
             visible={6}
             start={reasonStart}
-            setStart={
-              setReasonStart
-            }
+            setStart={setReasonStart}
           />
+
         </ChartCard>
 
-        {/* INDUSTRY */}
+
+        {/* =================================================
+            PCS VERTICAL
+        ================================================= */}
 
         <ChartCard
-          title="Win by Industrial Vertical"
+          title="Won by PCS Vertical"
           subtitle="
-            Won deals and value by industry
+            Won opportunities and value by PCS Vertical
           "
         >
+
           <div className="h-[430px]">
+
             <ResponsiveContainer
               width="100%"
               height="100%"
             >
+
               <BarChart
-                data={
-                  visibleIndustries
-                }
+                data={visiblePCS}
                 margin={{
                   top: 40,
-                  right: 35,
+                  right: 30,
                   left: 10,
                   bottom: 75,
                 }}
               >
+
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
@@ -2592,7 +2673,7 @@ export default function WonAnalysis({
 
                 <XAxis
                   dataKey="name"
-                  angle={-32}
+                  angle={-30}
                   textAnchor="end"
                   interval={0}
                   height={85}
@@ -2604,14 +2685,6 @@ export default function WonAnalysis({
                 />
 
                 <YAxis
-                  yAxisId="value"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <YAxis
-                  yAxisId="count"
-                  orientation="right"
                   axisLine={false}
                   tickLine={false}
                 />
@@ -2625,7 +2698,6 @@ export default function WonAnalysis({
                 <Legend />
 
                 <Bar
-                  yAxisId="count"
                   dataKey="count"
                   name="Count"
                   fill="#6366f1"
@@ -2636,17 +2708,17 @@ export default function WonAnalysis({
                     0,
                   ]}
                 >
+
                   <LabelList
-                    content={(props) => (
-                      <CountLabel
-                        {...props}
-                      />
-                    )}
+                    content={
+                      <CountLabel />
+                    }
                   />
+
                 </Bar>
 
+
                 <Bar
-                  yAxisId="value"
                   dataKey="value"
                   name="Value"
                   fill="#14b8a6"
@@ -2657,151 +2729,38 @@ export default function WonAnalysis({
                     0,
                   ]}
                 >
+
                   <LabelList
-                    content={(props) => (
-                      <ValueLabel
-                        {...props}
-                      />
-                    )}
+                    content={
+                      <ValueLabel />
+                    }
                   />
+
                 </Bar>
+
               </BarChart>
+
             </ResponsiveContainer>
+
           </div>
+
 
           <ChartSlider
             total={
-              industryData.length
+              pcsData.length
             }
             visible={6}
-            start={
-              industryStart
-            }
-            setStart={
-              setIndustryStart
-            }
+            start={pcsStart}
+            setStart={setPCSStart}
           />
+
         </ChartCard>
+
       </div>
 
-      {/* ===================================================
-          PCS VERTICAL
-      =================================================== */}
-
-      <ChartCard
-        title="Won by PCS Vertical"
-        subtitle="
-          Won opportunities and value by PCS Vertical
-        "
-      >
-        <div className="h-[430px]">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-          >
-            <BarChart
-              data={visiblePCS}
-              margin={{
-                top: 40,
-                right: 35,
-                left: 10,
-                bottom: 65,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-              />
-
-              <XAxis
-                dataKey="name"
-                angle={-30}
-                textAnchor="end"
-                interval={0}
-                height={80}
-                tick={{
-                  fontSize: 11,
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <YAxis
-                yAxisId="value"
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <YAxis
-                yAxisId="count"
-                orientation="right"
-                axisLine={false}
-                tickLine={false}
-              />
-
-              <Tooltip
-                content={
-                  <CustomTooltip />
-                }
-              />
-
-              <Legend />
-
-              <Bar
-                yAxisId="count"
-                dataKey="count"
-                name="Count"
-                fill="#6366f1"
-                radius={[
-                  6,
-                  6,
-                  0,
-                  0,
-                ]}
-              >
-                <LabelList
-                  content={(props) => (
-                    <CountLabel
-                      {...props}
-                    />
-                  )}
-                />
-              </Bar>
-
-              <Bar
-                yAxisId="value"
-                dataKey="value"
-                name="Value"
-                fill="#14b8a6"
-                radius={[
-                  6,
-                  6,
-                  0,
-                  0,
-                ]}
-              >
-                <LabelList
-                  content={(props) => (
-                    <ValueLabel
-                      {...props}
-                    />
-                  )}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <ChartSlider
-          total={pcsData.length}
-          visible={6}
-          start={pcsStart}
-          setStart={setPCSStart}
-        />
-      </ChartCard>
 
       {/* ===================================================
-          YOY WIN TREND
+          YOY TREND
       =================================================== */}
 
       <SectionHeader
@@ -2811,26 +2770,31 @@ export default function WonAnalysis({
         "
       />
 
+
       <ChartCard
         title="YOY Won Trend"
         subtitle="
           Won deals and value by year
         "
       >
+
         <div className="h-[420px]">
+
           <ResponsiveContainer
             width="100%"
             height="100%"
           >
+
             <LineChart
-              data={visibleYearly}
+              data={yearly}
               margin={{
-                top: 30,
-                right: 35,
+                top: 25,
+                right: 25,
                 left: 10,
                 bottom: 10,
               }}
             >
+
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
@@ -2870,13 +2834,10 @@ export default function WonAnalysis({
                 name="Won Deals"
                 stroke="#6366f1"
                 strokeWidth={3}
-                dot={{ r: 4 }}
-              >
-                <LabelList
-                  position="top"
-                  formatter={formatInt}
-                />
-              </Line>
+                dot={{
+                  r: 4,
+                }}
+              />
 
               <Line
                 yAxisId="value"
@@ -2885,257 +2846,133 @@ export default function WonAnalysis({
                 name="Won Value"
                 stroke="#14b8a6"
                 strokeWidth={3}
-                dot={{ r: 4 }}
-              >
-                <LabelList
-                  position="top"
-                  formatter={formatCr}
-                />
-              </Line>
+                dot={{
+                  r: 4,
+                }}
+              />
+
             </LineChart>
+
           </ResponsiveContainer>
+
         </div>
 
-        <ChartSlider
-          total={yearly.length}
-          visible={6}
-          start={yearlyStart}
-          setStart={setYearlyStart}
-        />
       </ChartCard>
 
+
       {/* ===================================================
-          REGION + DEAL SIZE
+          REGION
       =================================================== */}
 
       <SectionHeader
         title="Won Portfolio Mix"
         subtitle="
-          Regional and deal-size contribution
+          Regional contribution to won business
         "
       />
 
-      <div
-        className="
-          grid
-          grid-cols-1
-          gap-5
-          xl:grid-cols-2
+
+      <ChartCard
+        title="Win by Region"
+        subtitle="
+          Standardized region classification
         "
       >
 
-        {/* REGION */}
+        <div className="h-[410px]">
 
-        <ChartCard
-          title="Win by Region"
-          subtitle="
-            Standardized region classification
-          "
-        >
-          <div className="h-[410px]">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+
+            <BarChart
+              data={regionData}
+              margin={{
+                top: 40,
+                right: 30,
+                left: 10,
+                bottom: 30,
+              }}
             >
-              <BarChart
-                data={regionData}
-                margin={{
-                  top: 40,
-                  right: 35,
-                  left: 10,
-                  bottom: 30,
+
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+              />
+
+              <XAxis
+                dataKey="name"
+                interval={0}
+                axisLine={false}
+                tickLine={false}
+                tick={{
+                  fontSize: 11,
                 }}
+              />
+
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+              />
+
+              <Tooltip
+                content={
+                  <CustomTooltip />
+                }
+              />
+
+              <Legend />
+
+              <Bar
+                dataKey="count"
+                name="Count"
+                fill="#6366f1"
+                radius={[
+                  6,
+                  6,
+                  0,
+                  0,
+                ]}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
 
-                <XAxis
-                  dataKey="name"
-                  interval={0}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{
-                    fontSize: 11,
-                  }}
-                />
-
-                <YAxis
-                  yAxisId="value"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <YAxis
-                  yAxisId="count"
-                  orientation="right"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <Tooltip
+                <LabelList
                   content={
-                    <CustomTooltip />
+                    <CountLabel />
                   }
                 />
 
-                <Legend />
+              </Bar>
 
-                <Bar
-                  yAxisId="count"
-                  dataKey="count"
-                  name="Count"
-                  fill="#6366f1"
-                  radius={[
-                    6,
-                    6,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <CountLabel
-                        {...props}
-                      />
-                    )}
-                  />
-                </Bar>
 
-                <Bar
-                  yAxisId="value"
-                  dataKey="value"
-                  name="Value"
-                  fill="#14b8a6"
-                  radius={[
-                    6,
-                    6,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <ValueLabel
-                        {...props}
-                      />
-                    )}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        {/* DEAL SIZE */}
-
-        <ChartCard
-          title="Win by Deal Size"
-          subtitle="
-            Won deals and value by deal-size bucket
-          "
-        >
-          <div className="h-[410px]">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <BarChart
-                data={visibleDeals}
-                margin={{
-                  top: 40,
-                  right: 35,
-                  left: 10,
-                  bottom: 30,
-                }}
+              <Bar
+                dataKey="value"
+                name="Value"
+                fill="#14b8a6"
+                radius={[
+                  6,
+                  6,
+                  0,
+                  0,
+                ]}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
 
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  interval={0}
-                />
-
-                <YAxis
-                  yAxisId="value"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <YAxis
-                  yAxisId="count"
-                  orientation="right"
-                  axisLine={false}
-                  tickLine={false}
-                />
-
-                <Tooltip
+                <LabelList
                   content={
-                    <CustomTooltip />
+                    <ValueLabel />
                   }
                 />
 
-                <Legend />
+              </Bar>
 
-                <Bar
-                  yAxisId="count"
-                  dataKey="count"
-                  name="Count"
-                  fill="#6366f1"
-                  radius={[
-                    6,
-                    6,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <CountLabel
-                        {...props}
-                      />
-                    )}
-                  />
-                </Bar>
+            </BarChart>
 
-                <Bar
-                  yAxisId="value"
-                  dataKey="value"
-                  name="Value"
-                  fill="#14b8a6"
-                  radius={[
-                    6,
-                    6,
-                    0,
-                    0,
-                  ]}
-                >
-                  <LabelList
-                    content={(props) => (
-                      <ValueLabel
-                        {...props}
-                      />
-                    )}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          </ResponsiveContainer>
 
-          <ChartSlider
-            total={dealData.length}
-            visible={6}
-            start={dealStart}
-            setStart={setDealStart}
-          />
-        </ChartCard>
-      </div>
+        </div>
+
+      </ChartCard>
+
 
       {/* ===================================================
           SERVICES
@@ -3144,26 +2981,28 @@ export default function WonAnalysis({
       <ChartCard
         title="Win by Services Required"
         subtitle="
-          Capability/service mix among won opportunities
+          Service mix among won opportunities
         "
       >
+
         <div className="h-[450px]">
+
           <ResponsiveContainer
             width="100%"
             height="100%"
           >
+
             <BarChart
-              data={
-                visibleServices
-              }
+              data={visibleServices}
               layout="vertical"
               margin={{
                 top: 20,
                 right: 100,
-                left: 155,
+                left: 170,
                 bottom: 20,
               }}
             >
+
               <CartesianGrid
                 strokeDasharray="3 3"
                 horizontal={false}
@@ -3178,7 +3017,7 @@ export default function WonAnalysis({
               <YAxis
                 type="category"
                 dataKey="name"
-                width={145}
+                width={160}
                 tick={{
                   fontSize: 11,
                 }}
@@ -3205,15 +3044,15 @@ export default function WonAnalysis({
                   0,
                 ]}
               >
+
                 <LabelList
-                  content={(props) => (
-                    <CountLabel
-                      {...props}
-                      position="right"
-                    />
-                  )}
+                  content={
+                    <HorizontalCountLabel />
+                  }
                 />
+
               </Bar>
+
 
               <Bar
                 dataKey="value"
@@ -3226,18 +3065,21 @@ export default function WonAnalysis({
                   0,
                 ]}
               >
+
                 <LabelList
-                  content={(props) => (
-                    <ValueLabel
-                      {...props}
-                      position="right"
-                    />
-                  )}
+                  content={
+                    <HorizontalValueLabel />
+                  }
                 />
+
               </Bar>
+
             </BarChart>
+
           </ResponsiveContainer>
+
         </div>
+
 
         <ChartSlider
           total={
@@ -3245,11 +3087,11 @@ export default function WonAnalysis({
           }
           visible={6}
           start={serviceStart}
-          setStart={
-            setServiceStart
-          }
+          setStart={setServiceStart}
         />
+
       </ChartCard>
+
 
       {/* ===================================================
           REGISTER
@@ -3263,12 +3105,14 @@ export default function WonAnalysis({
           )} filtered won opportunities
         `}
       >
+
         <div
           className="
             max-h-[520px]
             overflow-auto
           "
         >
+
           <table
             className="
               w-full
@@ -3276,6 +3120,7 @@ export default function WonAnalysis({
               text-sm
             "
           >
+
             <thead
               className="
                 sticky
@@ -3283,48 +3128,60 @@ export default function WonAnalysis({
                 bg-slate-50
               "
             >
+
               <tr
                 className="
                   border-b
                   border-slate-200
                 "
               >
+
                 {[
                   "Opportunity",
                   "Customer",
                   "Owner",
                   "PCS Vertical",
-                  "Industry",
                   "Region",
                   "Won Year",
                   "Win Reason",
                   "Deal Size",
+                  "Services",
                   "Value",
-                ].map((header) => (
-                  <th
-                    key={header}
-                    className="
-                      px-4
-                      py-3
-                      text-left
-                      font-semibold
-                      text-slate-500
-                    "
-                  >
-                    {header}
-                  </th>
-                ))}
+                ].map(
+                  (header) => (
+
+                    <th
+                      key={header}
+                      className="
+                        px-4
+                        py-3
+                        text-left
+                        font-semibold
+                        text-slate-500
+                      "
+                    >
+                      {header}
+                    </th>
+
+                  )
+                )}
+
               </tr>
+
             </thead>
 
+
             <tbody>
+
               {filtered.map(
                 (row, index) => (
+
                   <tr
                     key={
                       row?.[
                         "Opportunity ID"
-                      ] || index
+                      ] ||
+                      index
                     }
                     className="
                       border-b
@@ -3332,6 +3189,7 @@ export default function WonAnalysis({
                       hover:bg-slate-50
                     "
                   >
+
                     <td
                       className="
                         max-w-[260px]
@@ -3341,12 +3199,15 @@ export default function WonAnalysis({
                         text-slate-800
                       "
                     >
-                      {text(
-                        row?.[
-                          "Opportunity Name"
-                        ]
-                      ) || "—"}
+                      {
+                        text(
+                          row?.[
+                            "Opportunity Name"
+                          ]
+                        ) || "—"
+                      }
                     </td>
+
 
                     <td
                       className="
@@ -3355,12 +3216,15 @@ export default function WonAnalysis({
                         text-slate-600
                       "
                     >
-                      {text(
-                        row?.[
-                          "Customer name"
-                        ]
-                      ) || "—"}
+                      {
+                        text(
+                          row?.[
+                            "Customer name"
+                          ]
+                        ) || "—"
+                      }
                     </td>
+
 
                     <td
                       className="
@@ -3372,6 +3236,7 @@ export default function WonAnalysis({
                       {getOwner(row)}
                     </td>
 
+
                     <td
                       className="
                         px-4
@@ -3382,15 +3247,6 @@ export default function WonAnalysis({
                       {getPCSVertical(row)}
                     </td>
 
-                    <td
-                      className="
-                        px-4
-                        py-3
-                        text-slate-600
-                      "
-                    >
-                      {getIndustry(row)}
-                    </td>
 
                     <td
                       className="
@@ -3399,10 +3255,13 @@ export default function WonAnalysis({
                         text-slate-600
                       "
                     >
-                      {getStandardizedRegion(
-                        row
-                      )}
+                      {
+                        getStandardizedRegion(
+                          row
+                        )
+                      }
                     </td>
+
 
                     <td
                       className="
@@ -3411,8 +3270,11 @@ export default function WonAnalysis({
                         text-slate-600
                       "
                     >
-                      {getWonYear(row)}
+                      {
+                        getWonYear(row)
+                      }
                     </td>
+
 
                     <td
                       className="
@@ -3422,10 +3284,13 @@ export default function WonAnalysis({
                         text-slate-600
                       "
                     >
-                      {standardizeWinReason(
-                        row
-                      )}
+                      {
+                        standardizeWinReason(
+                          row
+                        )
+                      }
                     </td>
+
 
                     <td
                       className="
@@ -3434,8 +3299,25 @@ export default function WonAnalysis({
                         text-slate-600
                       "
                     >
-                      {getDealSize(row)}
+                      {
+                        getDealSize(row)
+                      }
                     </td>
+
+
+                    <td
+                      className="
+                        max-w-[260px]
+                        px-4
+                        py-3
+                        text-slate-600
+                      "
+                    >
+                      {
+                        getService(row)
+                      }
+                    </td>
+
 
                     <td
                       className="
@@ -3445,17 +3327,26 @@ export default function WonAnalysis({
                         text-slate-900
                       "
                     >
-                      {formatCr(
-                        getValue(row)
-                      )}
+                      {
+                        formatCr(
+                          getValue(row)
+                        )
+                      }
                     </td>
+
                   </tr>
+
                 )
               )}
+
             </tbody>
+
           </table>
+
         </div>
+
       </ChartCard>
+
     </div>
   );
 }
