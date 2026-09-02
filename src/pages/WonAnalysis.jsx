@@ -2408,7 +2408,6 @@ export default function WonAnalysis({
           grid
           grid-cols-1
           gap-5
-          xl:grid-cols-2
         "
       >
 
@@ -2944,6 +2943,114 @@ export default function WonAnalysis({
                 <LabelList
                   content={
                     <HorizontalValueLabel />
+                  }
+                />
+
+              </Bar>
+
+            </BarChart>
+
+          </ResponsiveContainer>
+
+        </div>
+
+      </ChartCard>
+
+
+      {/* ===================================================
+          ALL SERVICES BY VALUE & COUNT
+      =================================================== */}
+
+      <ChartCard
+        title="All Services by Value & Count"
+        subtitle="
+          Total won opportunities and won value across all services
+        "
+      >
+
+        <div className="h-[450px]">
+
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+
+            <BarChart
+              data={visibleServices}
+              margin={{
+                top: 40,
+                right: 30,
+                left: 15,
+                bottom: 90,
+              }}
+            >
+
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+              />
+
+              <XAxis
+                dataKey="name"
+                interval={0}
+                angle={-32}
+                textAnchor="end"
+                height={100}
+                tick={{
+                  fontSize: 10,
+                }}
+                axisLine={false}
+                tickLine={false}
+              />
+
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+              />
+
+              <Tooltip
+                content={
+                  <CustomTooltip />
+                }
+              />
+
+              <Legend />
+
+              <Bar
+                dataKey="count"
+                name="Count"
+                fill="#6366f1"
+                radius={[
+                  6,
+                  6,
+                  0,
+                  0,
+                ]}
+              >
+
+                <LabelList
+                  content={
+                    <CountLabel />
+                  }
+                />
+
+              </Bar>
+
+              <Bar
+                dataKey="value"
+                name="Value"
+                fill="#14b8a6"
+                radius={[
+                  6,
+                  6,
+                  0,
+                  0,
+                ]}
+              >
+
+                <LabelList
+                  content={
+                    <ValueLabel />
                   }
                 />
 
