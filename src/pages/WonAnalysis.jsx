@@ -919,74 +919,6 @@ function MultiSelect({
 
 
 /* =========================================================
-   CHART SLIDER
-========================================================= */
-
-function ChartSlider({ total, start, end, setStart, setEnd }) {
-  if (total <= 1) return null;
-
-  const maxIndex = total - 1;
-  const safeStart = Math.max(0, Math.min(start, maxIndex));
-  const safeEnd = Math.max(safeStart, Math.min(end, maxIndex));
-
-  return (
-    <div className="mt-3 rounded-xl bg-slate-50 px-3 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-semibold text-slate-500">
-          Select range
-        </span>
-        <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">
-          {safeStart + 1}–{safeEnd + 1} / {total}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label className="flex items-center gap-2">
-          <span className="w-10 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            From
-          </span>
-          <input
-            type="range"
-            min="0"
-            max={maxIndex}
-            value={safeStart}
-            onChange={(e) =>
-              setStart(Math.min(Number(e.target.value), safeEnd))
-            }
-            className="w-full cursor-pointer accent-indigo-600"
-            aria-label="Chart range start"
-          />
-          <span className="w-8 text-right text-[11px] font-semibold text-slate-500">
-            {safeStart + 1}
-          </span>
-        </label>
-
-        <label className="flex items-center gap-2">
-          <span className="w-10 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-            To
-          </span>
-          <input
-            type="range"
-            min="0"
-            max={maxIndex}
-            value={safeEnd}
-            onChange={(e) =>
-              setEnd(Math.max(Number(e.target.value), safeStart))
-            }
-            className="w-full cursor-pointer accent-indigo-600"
-            aria-label="Chart range end"
-          />
-          <span className="w-8 text-right text-[11px] font-semibold text-slate-500">
-            {safeEnd + 1}
-          </span>
-        </label>
-      </div>
-    </div>
-  );
-}
-
-
-/* =========================================================
    CHART LABELS
 ========================================================= */
 
@@ -1969,59 +1901,13 @@ export default function WonAnalysis({
 
 
   /* =======================================================
-     SLIDERS
+     CHART DATA
   ======================================================= */
 
-  const [reasonStart, setReasonStart] = useState(0);
-  const [reasonEnd, setReasonEnd] = useState(5);
-
-  const [pcsStart, setPCSStart] = useState(0);
-  const [pcsEnd, setPCSEnd] = useState(5);
-
-  const [serviceStart, setServiceStart] = useState(0);
-  const [serviceEnd, setServiceEnd] = useState(5);
-
-  const safeReasonStart = Math.min(
-    reasonStart,
-    Math.max(0, reasonData.length - 1)
-  );
-  const safeReasonEnd = Math.max(
-    safeReasonStart,
-    Math.min(reasonEnd, Math.max(0, reasonData.length - 1))
-  );
-
-  const safePCSStart = Math.min(
-    pcsStart,
-    Math.max(0, pcsData.length - 1)
-  );
-  const safePCSEnd = Math.max(
-    safePCSStart,
-    Math.min(pcsEnd, Math.max(0, pcsData.length - 1))
-  );
-
-  const safeServiceStart = Math.min(
-    serviceStart,
-    Math.max(0, serviceData.length - 1)
-  );
-  const safeServiceEnd = Math.max(
-    safeServiceStart,
-    Math.min(serviceEnd, Math.max(0, serviceData.length - 1))
-  );
-
-  const visibleReasons = reasonData.slice(
-    safeReasonStart,
-    safeReasonEnd + 1
-  );
-
-  const visiblePCS = pcsData.slice(
-    safePCSStart,
-    safePCSEnd + 1
-  );
-
-  const visibleServices = serviceData.slice(
-    safeServiceStart,
-    safeServiceEnd + 1
-  );
+  // Show the complete dataset on each chart; no range sliders on this page.
+  const visibleReasons = reasonData;
+  const visiblePCS = pcsData;
+  const visibleServices = serviceData;
 
 
   /* =======================================================
@@ -2634,15 +2520,6 @@ export default function WonAnalysis({
 
           </div>
 
-
-          <ChartSlider
-            total={reasonData.length}
-            start={reasonStart}
-            end={reasonEnd}
-            setStart={setReasonStart}
-            setEnd={setReasonEnd}
-          />
-
         </ChartCard>
 
 
@@ -2751,15 +2628,6 @@ export default function WonAnalysis({
             </ResponsiveContainer>
 
           </div>
-
-
-          <ChartSlider
-            total={pcsData.length}
-            start={pcsStart}
-            end={pcsEnd}
-            setStart={setPCSStart}
-            setEnd={setPCSEnd}
-          />
 
         </ChartCard>
 
@@ -3086,15 +2954,6 @@ export default function WonAnalysis({
           </ResponsiveContainer>
 
         </div>
-
-
-        <ChartSlider
-          total={serviceData.length}
-          start={serviceStart}
-          end={serviceEnd}
-          setStart={setServiceStart}
-          setEnd={setServiceEnd}
-        />
 
       </ChartCard>
 
