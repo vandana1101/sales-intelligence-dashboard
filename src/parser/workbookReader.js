@@ -119,12 +119,17 @@ function detectDatasetType(row) {
 }
 
 function isEmptyValue(value) {
-  if (value === null || value === undefined) return true;
+  if (value === null || value === undefined) {
+    return true;
+  }
+
   return String(value).trim() === "";
 }
 
 function isMissingMarker(value) {
-  if (value === null || value === undefined) return false;
+  if (value === null || value === undefined) {
+    return false;
+  }
 
   const normalized = String(value)
     .replace(/^\uFEFF/, "")
@@ -158,7 +163,9 @@ function isNumericHeader(header) {
 
   if (!h) return false;
 
-  /* Keep identifiers/contact numbers as strings. */
+  /*
+   * Keep identifiers/contact numbers as strings.
+   */
   if (
     h.includes(" id") ||
     h.endsWith("id") ||
@@ -220,7 +227,10 @@ function pad2(value) {
 }
 
 function formatDate(date, includeTime = false) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+  if (
+    !(date instanceof Date) ||
+    Number.isNaN(date.getTime())
+  ) {
     return null;
   }
 
@@ -230,9 +240,13 @@ function formatDate(date, includeTime = false) {
 
   if (!includeTime) return base;
 
-  return `${base} ${pad2(date.getHours())}:${pad2(
+  return `${base} ${pad2(
+    date.getHours()
+  )}:${pad2(
     date.getMinutes()
-  )}:${pad2(date.getSeconds())}`;
+  )}:${pad2(
+    date.getSeconds()
+  )}`;
 }
 
 function parseDateValue(value) {
@@ -241,9 +255,12 @@ function parseDateValue(value) {
   }
 
   if (typeof value === "number") {
-    /* Excel serial date. */
+    /*
+     * Excel serial date.
+     */
     if (value > 0 && value < 100000) {
-      const parsed = XLSX.SSF.parse_date_code(value);
+      const parsed =
+        XLSX.SSF.parse_date_code(value);
 
       if (parsed) {
         const date = new Date(
@@ -262,7 +279,12 @@ function parseDateValue(value) {
     return String(value);
   }
 
-  if (value === null || value === undefined) return null;
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
 
   let text = String(value)
     .replace(/^\uFEFF/, "")
@@ -270,7 +292,9 @@ function parseDateValue(value) {
 
   if (!text) return null;
 
-  /* DD-MMM-YY / DD-MMM-YYYY */
+  /*
+   * DD-MMM-YY / DD-MMM-YYYY
+   */
   const dmyText = text.match(
     /^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s](\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
   );
@@ -292,13 +316,21 @@ function parseDateValue(value) {
     };
 
     const day = Number(dmyText[1]);
+
     const month =
-      months[dmyText[2].slice(0, 3).toLowerCase()];
+      months[
+        dmyText[2]
+          .slice(0, 3)
+          .toLowerCase()
+      ];
 
     let year = Number(dmyText[3]);
 
     if (year < 100) {
-      year += year >= 50 ? 1900 : 2000;
+      year +=
+        year >= 50
+          ? 1900
+          : 2000;
     }
 
     if (month !== undefined) {
@@ -324,15 +356,21 @@ function parseDateValue(value) {
     }
   }
 
-  /* DD/MM/YYYY and DD-MM-YYYY */
+  /*
+   * DD/MM/YYYY and DD-MM-YYYY
+   */
   const numericDmy = text.match(
     /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
   );
 
   if (numericDmy) {
     const day = Number(numericDmy[1]);
-    const month = Number(numericDmy[2]) - 1;
-    const year = Number(numericDmy[3]);
+
+    const month =
+      Number(numericDmy[2]) - 1;
+
+    const year =
+      Number(numericDmy[3]);
 
     const date = new Date(
       year,
@@ -355,7 +393,9 @@ function parseDateValue(value) {
     }
   }
 
-  /* ISO-like dates/timestamps. */
+  /*
+   * ISO-like dates/timestamps.
+   */
   const iso = new Date(text);
 
   if (!Number.isNaN(iso.getTime())) {
@@ -365,61 +405,90 @@ function parseDateValue(value) {
     );
   }
 
-  /* Leave unusual date values untouched rather than destroying data. */
+  /*
+   * Leave unusual date values untouched
+   * rather than destroying data.
+   */
   return text;
 }
 
 /**
- * Canonicalizes values by header so the same source data represented
- * as Excel or CSV reaches the calculations in the same form.
+ * Canonicalizes values by header so the same source
+ * data represented as Excel or CSV reaches the
+ * calculations in the same form.
  */
 function normalizeRows(rows) {
   if (!Array.isArray(rows)) return [];
 
   return rows.map((row) => {
-    if (!row || typeof row !== "object") return row;
+    if (
+      !row ||
+      typeof row !== "object"
+    ) {
+      return row;
+    }
 
     const normalizedRow = {};
 
-    Object.entries(row).forEach(([header, value]) => {
-      if (
-        isEmptyValue(value) ||
-        isMissingMarker(value)
-      ) {
-        normalizedRow[header] = null;
-        return;
-      }
+    Object.entries(row).forEach(
+      ([header, value]) => {
+        if (
+          isEmptyValue(value) ||
+          isMissingMarker(value)
+        ) {
+          normalizedRow[header] = null;
+          return;
+        }
 
-      if (isDateHeader(header)) {
+        if (isDateHeader(header)) {
+          normalizedRow[header] =
+            parseDateValue(value);
+
+          return;
+        }
+
+        if (isNumericHeader(header)) {
+          const parsed =
+            parseNumber(value);
+
+          normalizedRow[header] =
+            parsed === null
+              ? value
+              : parsed;
+
+          return;
+        }
+
+        if (typeof value === "string") {
+          normalizedRow[header] =
+            value
+              .replace(/^\uFEFF/, "")
+              .trim();
+
+          return;
+        }
+
         normalizedRow[header] =
-          parseDateValue(value);
-        return;
+          value;
       }
-
-      if (isNumericHeader(header)) {
-        const parsed = parseNumber(value);
-
-        normalizedRow[header] =
-          parsed === null ? value : parsed;
-
-        return;
-      }
-
-      if (typeof value === "string") {
-        normalizedRow[header] = value
-          .replace(/^\uFEFF/, "")
-          .trim();
-
-        return;
-      }
-
-      normalizedRow[header] = value;
-    });
+    );
 
     return normalizedRow;
   });
 }
 
+/**
+ * Removes rows that belong to pivot summaries
+ * or other content appearing after the real CSV dataset.
+ *
+ * In the uploaded CSV, the Opportunity table contains
+ * exactly 1,476 records. After those records the CSV has:
+ *
+ * Distinct Count of Opportunity ID
+ * 1476
+ *
+ * Those summary rows must never become Opportunity records.
+ */
 function trimCSVSectionRows(
   sectionRows,
   expectedColumnCount
@@ -429,23 +498,53 @@ function trimCSVSectionRows(
   for (const row of sectionRows) {
     if (!Array.isArray(row)) continue;
 
+    const firstCell = String(
+      row[0] ?? ""
+    )
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .toLowerCase();
+
+    /*
+     * Explicit pivot/report summary markers.
+     */
+    if (
+      firstCell ===
+        "distinct count of opportunity id" ||
+      firstCell ===
+        "count of opportunity id" ||
+      firstCell ===
+        "grand total" ||
+      firstCell ===
+        "row labels" ||
+      firstCell ===
+        "column labels"
+    ) {
+      break;
+    }
+
     const nonEmpty = row.filter(
-      (value) => !isEmptyValue(value)
+      (value) =>
+        !isEmptyValue(value)
     ).length;
 
+    /*
+     * Completely blank row = end of dataset.
+     */
     if (nonEmpty === 0) {
       if (cleaned.length) break;
+
       continue;
     }
 
     /*
-     * The report CSV contains pivot summaries after the
-     * real table. Real data rows use the full dataset width;
-     * pivot rows are much shorter. Stop when the table clearly ends.
+     * Pivot summary rows are much shorter
+     * than the actual Opportunity table.
      */
     if (
       expectedColumnCount > 10 &&
-      row.length < expectedColumnCount * 0.75
+      row.length <
+        expectedColumnCount * 0.75
     ) {
       break;
     }
@@ -456,68 +555,90 @@ function trimCSVSectionRows(
   return cleaned;
 }
 
-function splitCSVIntoDatasets(worksheet) {
-  const rows = XLSX.utils.sheet_to_json(
-    worksheet,
-    {
-      header: 1,
-      defval: null,
-      raw: false,
-      blankrows: true,
-    }
-  );
+function splitCSVIntoDatasets(
+  worksheet
+) {
+  const rows =
+    XLSX.utils.sheet_to_json(
+      worksheet,
+      {
+        header: 1,
+        defval: null,
+        raw: false,
+        blankrows: true,
+      }
+    );
 
   const detectedSections = [];
 
-  rows.forEach((row, index) => {
-    const type = detectDatasetType(row);
+  rows.forEach(
+    (row, index) => {
+      const type =
+        detectDatasetType(row);
 
-    if (!type) return;
+      if (!type) return;
 
-    if (
-      detectedSections.some(
-        (section) => section.type === type
-      )
-    ) {
-      return;
+      if (
+        detectedSections.some(
+          (section) =>
+            section.type === type
+        )
+      ) {
+        return;
+      }
+
+      detectedSections.push({
+        type,
+        headerIndex: index,
+      });
     }
+  );
 
-    detectedSections.push({
-      type,
-      headerIndex: index,
-    });
-  });
-
-  if (!detectedSections.length) {
+  if (
+    !detectedSections.length
+  ) {
     return null;
   }
 
   const sheets = {};
 
   detectedSections.forEach(
-    (section, sectionIndex) => {
+    (
+      section,
+      sectionIndex
+    ) => {
       const nextSection =
-        detectedSections[sectionIndex + 1];
+        detectedSections[
+          sectionIndex + 1
+        ];
 
-      const start = section.headerIndex;
+      const start =
+        section.headerIndex;
 
       const end = nextSection
         ? nextSection.headerIndex
         : rows.length;
 
-      const headerRow = rows[start] || [];
+      const headerRow =
+        rows[start] || [];
 
-      let sectionRows = rows.slice(
-        start,
-        end
-      );
+      let sectionRows =
+        rows.slice(
+          start,
+          end
+        );
 
-      sectionRows = trimCSVSectionRows(
-        sectionRows,
-        headerRow.length
-      );
+      sectionRows =
+        trimCSVSectionRows(
+          sectionRows,
+          headerRow.length
+        );
 
-      if (!sectionRows.length) return;
+      if (
+        !sectionRows.length
+      ) {
+        return;
+      }
 
       const logicalWorksheet =
         XLSX.utils.aoa_to_sheet(
@@ -534,7 +655,9 @@ function splitCSVIntoDatasets(worksheet) {
         );
 
       sheets[section.type] =
-        normalizeRows(jsonRows);
+        normalizeRows(
+          jsonRows
+        );
     }
   );
 
@@ -542,70 +665,83 @@ function splitCSVIntoDatasets(worksheet) {
 }
 
 async function readCSV(file) {
-  const readCSVText = async (csvText) => {
-    if (
-      typeof csvText !== "string" ||
-      !csvText.trim()
-    ) {
-      throw new Error(
-        "The CSV file is empty."
-      );
-    }
-
-    const workbook = XLSX.read(
-      csvText,
-      {
-        type: "string",
-        raw: false,
-        cellDates: true,
+  const readCSVText =
+    async (csvText) => {
+      if (
+        typeof csvText !==
+          "string" ||
+        !csvText.trim()
+      ) {
+        throw new Error(
+          "The CSV file is empty."
+        );
       }
-    );
 
-    const firstSheetName =
-      workbook.SheetNames[0];
+      const workbook =
+        XLSX.read(
+          csvText,
+          {
+            type: "string",
+            raw: false,
+            cellDates: true,
+          }
+        );
 
-    const firstWorksheet =
-      workbook.Sheets[firstSheetName];
+      const firstSheetName =
+        workbook
+          .SheetNames[0];
 
-    const datasets =
-      splitCSVIntoDatasets(
-        firstWorksheet
+      const firstWorksheet =
+        workbook.Sheets[
+          firstSheetName
+        ];
+
+      const datasets =
+        splitCSVIntoDatasets(
+          firstWorksheet
+        );
+
+      if (
+        datasets &&
+        Object.keys(
+          datasets
+        ).length
+      ) {
+        return {
+          SheetNames:
+            Object.keys(
+              datasets
+            ),
+          Sheets:
+            datasets,
+        };
+      }
+
+      const sheets = {};
+
+      workbook.SheetNames.forEach(
+        (sheetName) => {
+          sheets[sheetName] =
+            normalizeRows(
+              XLSX.utils.sheet_to_json(
+                workbook.Sheets[
+                  sheetName
+                ],
+                {
+                  defval: null,
+                  raw: false,
+                }
+              )
+            );
+        }
       );
 
-    if (
-      datasets &&
-      Object.keys(datasets).length
-    ) {
       return {
         SheetNames:
-          Object.keys(datasets),
-        Sheets: datasets,
+          workbook.SheetNames,
+        Sheets: sheets,
       };
-    }
-
-    const sheets = {};
-
-    workbook.SheetNames.forEach(
-      (sheetName) => {
-        sheets[sheetName] =
-          normalizeRows(
-            XLSX.utils.sheet_to_json(
-              workbook.Sheets[sheetName],
-              {
-                defval: null,
-                raw: false,
-              }
-            )
-          );
-      }
-    );
-
-    return {
-      SheetNames:
-        workbook.SheetNames,
-      Sheets: sheets,
     };
-  };
 
   try {
     return await readCSVText(
@@ -616,7 +752,9 @@ async function readCSV(file) {
       return await readCSVText(
         await readAsText(file)
       );
-    } catch (fallbackError) {
+    } catch (
+      fallbackError
+    ) {
       throw new Error(
         `CSV file could not be read. ${
           fallbackError?.message ||
@@ -629,26 +767,33 @@ async function readCSV(file) {
 }
 
 async function readExcel(file) {
-  const parseExcel = (buffer) =>
-    XLSX.read(
-      buffer,
-      {
-        type: "array",
-        cellDates: true,
-        raw: false,
-      }
-    );
+  const parseExcel =
+    (buffer) =>
+      XLSX.read(
+        buffer,
+        {
+          type: "array",
+          cellDates: true,
+          raw: false,
+        }
+      );
 
   try {
     return parseExcel(
       await file.arrayBuffer()
     );
-  } catch (arrayBufferError) {
+  } catch (
+    arrayBufferError
+  ) {
     try {
       return parseExcel(
-        await readAsArrayBuffer(file)
+        await readAsArrayBuffer(
+          file
+        )
       );
-    } catch (fallbackError) {
+    } catch (
+      fallbackError
+    ) {
       throw new Error(
         `Excel file could not be read. ${
           fallbackError?.message ||
@@ -660,19 +805,23 @@ async function readExcel(file) {
   }
 }
 
-export async function readWorkbook(file) {
+export async function readWorkbook(
+  file
+) {
   if (!file) {
     throw new Error(
       "No file was provided."
     );
   }
 
-  const fileName = file.name || "";
+  const fileName =
+    file.name || "";
 
-  const extension = fileName
-    .split(".")
-    .pop()
-    .toLowerCase();
+  const extension =
+    fileName
+      .split(".")
+      .pop()
+      .toLowerCase();
 
   const supportedExtensions = [
     "xlsx",
@@ -692,10 +841,14 @@ export async function readWorkbook(file) {
 
   let workbook;
 
-  if (extension === "csv") {
-    workbook = await readCSV(file);
+  if (
+    extension === "csv"
+  ) {
+    workbook =
+      await readCSV(file);
   } else {
-    workbook = await readExcel(file);
+    workbook =
+      await readExcel(file);
   }
 
   if (
@@ -703,7 +856,8 @@ export async function readWorkbook(file) {
     !Array.isArray(
       workbook.SheetNames
     ) ||
-    workbook.SheetNames.length === 0
+    workbook.SheetNames
+      .length === 0
   ) {
     throw new Error(
       "No readable data was found in the file."
@@ -715,11 +869,17 @@ export async function readWorkbook(file) {
   workbook.SheetNames.forEach(
     (sheetName) => {
       const source =
-        workbook.Sheets[sheetName];
+        workbook.Sheets[
+          sheetName
+        ];
 
-      if (Array.isArray(source)) {
+      if (
+        Array.isArray(source)
+      ) {
         sheets[sheetName] =
-          normalizeRows(source);
+          normalizeRows(
+            source
+          );
 
         return;
       }
