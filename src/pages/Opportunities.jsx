@@ -157,10 +157,6 @@ function getColumnExtremes(items, accessor) {
 ========================================================= */
 
 function getOpportunityValue(row) {
-  if (row?.__opportunityValue !== undefined) {
-    return row.__opportunityValue;
-  }
-
   const valueColumn = Object.keys(row || {}).find((key) =>
     /(?:value|values).*?(?:cr|crore)/i.test(key)
   );
@@ -178,10 +174,6 @@ function getOpportunityValue(row) {
 }
 
 function getOpportunityValueCrores(row) {
-  if (row?.__opportunityValueCrores !== undefined) {
-    return row.__opportunityValueCrores;
-  }
-
   const valueColumn = Object.keys(row || {}).find((key) =>
     /(?:value|values).*?(?:cr|crore)/i.test(key)
   );
@@ -203,19 +195,30 @@ function getOpportunityValueCrores(row) {
 ========================================================= */
 
 function getAge(row) {
-  if (row?.__age !== undefined) return row.__age;
-
   const age = number(row["Age"]);
-  if (age >= 0 && row["Age"] !== null && row["Age"] !== "") {
+
+  if (
+    age >= 0 &&
+    row["Age"] !== null &&
+    row["Age"] !== ""
+  ) {
     return age;
   }
 
-  const created = row?.__createdDate || parseDate(row["Opportunity Created Date"]);
+  const created = row["Opportunity Created Date"];
+
   if (created) {
-    return Math.max(
-      0,
-      Math.floor((Date.now() - created.getTime()) / 86400000)
-    );
+    const date = new Date(created);
+
+    if (!Number.isNaN(date.getTime())) {
+      return Math.max(
+        0,
+        Math.floor(
+          (Date.now() - date.getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      );
+    }
   }
 
   return 0;
@@ -242,41 +245,48 @@ function getAgeBucket(
 ========================================================= */
 
 function getOutcome(row) {
-  if (row?.__outcome) return row.__outcome;
-
   const stage = text(row["Opportunity Stage"]).toLowerCase().replace(/\s+/g, " ").trim();
-  if (["won", "onboarded", "1st invoice", "agreement", "loi received"].includes(stage)) return "Won";
+
+  if (["won", "onboarded", "1st invoice", "agreement", "loi received"].includes(stage)) {
+    return "Won";
+  }
   if (stage === "lost") return "Lost";
   if (stage === "hold") return "Hold";
   return "Active/In Pipeline";
 }
 
 function getStage(row) {
-  if (row?.__stage) return row.__stage;
   const rawStage = text(row["Opportunity Stage"]);
   if (!rawStage) return "Unknown";
+
+  // Canonical presentation labels used everywhere in the dashboard.
+  // IMPORTANT: getOutcome() intentionally reads the raw Opportunity Stage
+  // so these display/grouping changes never alter the Outcome Bucket logic.
   const normalized = rawStage.toLowerCase().replace(/\s+/g, " ").trim();
+
   if (normalized === "negotiation") return "Negotiation";
   if (normalized === "solution design" || normalized === "proposal wip") return "Solutions design";
   if (normalized === "rfq receipt") return "Proposal Received";
   if (normalized === "rfq submission") return "Proposal submission";
+
   return rawStage;
 }
 
 function getOwner(row) {
-  return row?.__owner || text(row["Assigned To"]) || "Unassigned";
+  return text(row["Assigned To"]) || "Unassigned";
 }
 
 function getIndustry(row) {
-  return row?.__industry || text(row["Industry"]) || "Unknown";
+  return text(row["Industry"]) || "Unknown";
 }
 
 function getPCSVertical(row) {
-  return row?.__pcsVertical ||
+  return (
     text(row["PCS Vertical"]) ||
     text(row["PCS  Vertical"]) ||
     text(row["PCS_Vertical"]) ||
-    "Unknown";
+    "Unknown"
+  );
 }
 
 function parseDate(value) {
@@ -381,7 +391,6 @@ function parseDate(value) {
 }
 
 function getCreatedDate(row) {
-  if (row?.__createdDate !== undefined) return row.__createdDate;
   return parseDate(row["Opportunity Created Date"]);
 }
 
@@ -396,31 +405,38 @@ function getISOWeekInfo(date) {
 }
 
 function getMonthInfo(row) {
-  if (row?.__monthInfo) return row.__monthInfo;
   const date = getCreatedDate(row);
   if (!date) return { label: "Unknown", key: -1 };
-  return { label: date.toLocaleString("en-US", { month: "short", year: "numeric" }), key: date.getFullYear() * 100 + date.getMonth() };
+  return {
+    label: date.toLocaleString("en-US", { month: "short", year: "numeric" }),
+    key: date.getFullYear() * 100 + date.getMonth(),
+  };
 }
 
 function getWeekInfo(row) {
-  if (row?.__weekInfo) return row.__weekInfo;
   const date = getCreatedDate(row);
   if (!date) return { label: "Unknown", key: -1 };
+
+  // Week numbering is within the calendar month so filters read naturally
+  // as "Week 1 Mar 2026", "Week 2 Mar 2026", etc.
   const weekOfMonth = Math.ceil(date.getDate() / 7);
   const month = date.toLocaleString("en-US", { month: "short" });
   const year = date.getFullYear();
-  return { label: `Week ${weekOfMonth} ${month} ${year}`, key: year * 10000 + date.getMonth() * 10 + weekOfMonth };
+  const key = year * 10000 + date.getMonth() * 10 + weekOfMonth;
+
+  return {
+    label: `Week ${weekOfMonth} ${month} ${year}`,
+    key,
+  };
 }
 
 function getYearInfo(row) {
-  if (row?.__yearInfo) return row.__yearInfo;
   const date = getCreatedDate(row);
   if (!date) return { label: "Unknown", key: -1 };
   return { label: String(date.getFullYear()), key: date.getFullYear() };
 }
 
 function getFiscalQuarterInfo(row) {
-  if (row?.__quarterInfo) return row.__quarterInfo;
   const date = getCreatedDate(row);
   if (!date) return { label: "Unknown", key: -1 };
   const month = date.getMonth();
@@ -431,7 +447,6 @@ function getFiscalQuarterInfo(row) {
 }
 
 function getRegion(row) {
-  if (row?.__region) return row.__region;
   const raw = text(row["Customer Service required region"] || row["PCS User Region"]).toLowerCase();
   if (!raw) return "Unknown";
 
@@ -477,80 +492,6 @@ function getMonth(row) {
 
 function getWeek(row) {
   return getWeekInfo(row).label;
-}
-
-/* =========================================================
-   ONE-TIME OPPORTUNITY ENRICHMENT
-   Expensive derived fields are calculated once per uploaded row.
-   Non-enumerable cache fields do not appear in CSV exports.
-========================================================= */
-
-function enrichOpportunity(row) {
-  const enriched = { ...(row || {}) };
-  const createdDate = parseDate(enriched["Opportunity Created Date"]);
-  const opportunityValueCrores = getOpportunityValueCrores(enriched);
-  const outcome = getOutcome(enriched);
-  const stage = getStage(enriched);
-  const owner = getOwner(enriched);
-  const industry = getIndustry(enriched);
-  const pcsVertical = getPCSVertical(enriched);
-  const region = getRegion(enriched);
-
-  const monthInfo = createdDate
-    ? { label: createdDate.toLocaleString("en-US", { month: "short", year: "numeric" }), key: createdDate.getFullYear() * 100 + createdDate.getMonth() }
-    : { label: "Unknown", key: -1 };
-
-  const weekInfo = createdDate
-    ? (() => {
-        const weekOfMonth = Math.ceil(createdDate.getDate() / 7);
-        const month = createdDate.toLocaleString("en-US", { month: "short" });
-        const year = createdDate.getFullYear();
-        return { label: `Week ${weekOfMonth} ${month} ${year}`, key: year * 10000 + createdDate.getMonth() * 10 + weekOfMonth };
-      })()
-    : { label: "Unknown", key: -1 };
-
-  const yearInfo = createdDate
-    ? { label: String(createdDate.getFullYear()), key: createdDate.getFullYear() }
-    : { label: "Unknown", key: -1 };
-
-  const quarterInfo = createdDate
-    ? (() => {
-        const month = createdDate.getMonth();
-        const year = createdDate.getFullYear();
-        const quarter = month >= 3 ? Math.floor((month - 3) / 3) + 1 : 4;
-        const fiscalYear = month >= 3 ? year : year - 1;
-        return { label: `Q${quarter} ${fiscalYear}`, key: fiscalYear * 10 + quarter };
-      })()
-    : { label: "Unknown", key: -1 };
-
-  let age;
-  const sourceAge = number(enriched["Age"]);
-  if (sourceAge >= 0 && enriched["Age"] !== null && enriched["Age"] !== "") {
-    age = sourceAge;
-  } else if (createdDate) {
-    age = Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 86400000));
-  } else {
-    age = 0;
-  }
-
-  Object.defineProperties(enriched, {
-    __createdDate: { value: createdDate, enumerable: false },
-    __opportunityValue: { value: opportunityValueCrores * 10000000, enumerable: false },
-    __opportunityValueCrores: { value: opportunityValueCrores, enumerable: false },
-    __age: { value: age, enumerable: false },
-    __outcome: { value: outcome, enumerable: false },
-    __stage: { value: stage, enumerable: false },
-    __owner: { value: owner, enumerable: false },
-    __industry: { value: industry, enumerable: false },
-    __pcsVertical: { value: pcsVertical, enumerable: false },
-    __region: { value: region, enumerable: false },
-    __monthInfo: { value: monthInfo, enumerable: false },
-    __weekInfo: { value: weekInfo, enumerable: false },
-    __yearInfo: { value: yearInfo, enumerable: false },
-    __quarterInfo: { value: quarterInfo, enumerable: false },
-  });
-
-  return enriched;
 }
 
 /* =========================================================
@@ -1200,7 +1141,7 @@ function Opportunities({
         data?.opportunities
       )
     ) {
-      return data.opportunities.map(enrichOpportunity);
+      return data.opportunities;
     }
 
     if (
@@ -1208,7 +1149,7 @@ function Opportunities({
         data?.currentOpportunities
       )
     ) {
-      return data.currentOpportunities.map(enrichOpportunity);
+      return data.currentOpportunities;
     }
 
     if (

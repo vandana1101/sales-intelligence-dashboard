@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-
 import {
 Trophy,
 IndianRupee,
@@ -11,7 +10,6 @@ Search,
 X,
 ChevronDown,
 } from "lucide-react";
-
 import {
 ResponsiveContainer,
 BarChart,
@@ -25,21 +23,17 @@ Tooltip,
 Legend,
 LabelList,
 } from "recharts";
-
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
-
 /* =========================================================
 HELPERS
 ========================================================= */
-
 function text(v) {
 return v === null || v === undefined
 ? ""
 : String(v).trim();
 }
-
 function num(v) {
 if (
 v === null ||
@@ -48,35 +42,28 @@ v === ""
 ) {
 return 0;
 }
-
 if (typeof v === "number") {
 return Number.isFinite(v) ? v : 0;
 }
-
 const n = Number(
 String(v)
 .replace(/[₹,%\s,]/g, "")
 );
-
 return Number.isFinite(n) ? n : 0;
 }
-
 /* =========================================================
 DATE HELPERS
 ========================================================= */
-
 function dateValue(v) {
 if (!v) {
 return null;
 }
-
 if (
 v instanceof Date &&
 !Number.isNaN(v.getTime())
 ) {
 return v;
 }
-
 if (typeof v === "number") {
 const d = new Date(
 Date.UTC(1899, 11, 30) +
@@ -88,20 +75,16 @@ return Number.isNaN(d.getTime())
   : d;
 
 }
-
 const d = new Date(v);
-
 return Number.isNaN(d.getTime())
 ? null
 : d;
 }
-
 function getCreatedDate(row) {
 return dateValue(
 first(row, ["Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate"])
 );
 }
-
 function getWonDate(row) {
 return (
 first(row, ["Date won", "Date Won", "Date_won", "DateWon"]) ||
@@ -109,54 +92,41 @@ first(row, ["Won Date", "Won_Date", "WonDate"]) ||
 first(row, ["Onboarded date", "Onboarded Date", "Onboarded_date", "OnboardedDate"])
 );
 }
-
 function getWonYear(row) {
 const d = dateValue(getWonDate(row));
-
 if (d) {
 return String(d.getFullYear());
 }
-
 const created = getCreatedDate(row);
-
 return created
 ? String(created.getFullYear())
 : "Unknown";
 }
-
 function getOpportunityWeek(row) {
 const d = getCreatedDate(row);
-
 if (!d) {
 return "Unknown";
 }
-
 const start = new Date(
 d.getFullYear(),
 0,
 1
 );
-
 const diff = Math.floor(
 (
 d.getTime() -
 start.getTime()
 ) / 86400000
 );
-
 const week =
 Math.floor(diff / 7) + 1;
-
-return Week ${week} ${d.getFullYear()};
+return `Week ${week} ${d.getFullYear()}`;
 }
-
 function getOpportunityMonth(row) {
 const d = getCreatedDate(row);
-
 if (!d) {
 return "Unknown";
 }
-
 return d.toLocaleString(
 "en-US",
 {
@@ -165,32 +135,23 @@ year: "numeric",
 }
 );
 }
-
 /*
 
-Fiscal year:
-
-
-
-Q1 = Apr-Jun
-
-Q2 = Jul-Sep
-
-Q3 = Oct-Dec
-
-Q4 = Jan-Mar
-*/
-function getFiscalQuarter(row) {
-const d = getCreatedDate(row);
+- Fiscal year:
+-
+- Q1 = Apr-Jun
+- Q2 = Jul-Sep
+- Q3 = Oct-Dec
+- Q4 = Jan-Mar
+  */
+  function getFiscalQuarter(row) {
+  const d = getCreatedDate(row);
 
 if (!d) {
 return "Unknown";
 }
-
 const month = d.getMonth() + 1;
-
 let quarter;
-
 if (month >= 4 && month <= 6) {
 quarter = "Q1";
 } else if (month >= 7 && month <= 9) {
@@ -200,61 +161,45 @@ quarter = "Q3";
 } else {
 quarter = "Q4";
 }
-
-return ${quarter} ${d.getFullYear()};
+return `${quarter} ${d.getFullYear()}`;
 }
-
 /* =========================================================
 VALUE
 ========================================================= */
-
 /*
 
-Value is always converted into Crores.
-
-
-
-Priority:
-
-
-
-
-
-Values in Cr
-
-
-
-Value of Contract Per Annum INR / 10^7
-
-
-
-Revenue potential per month × 12 / 10^7
-*/
-function getValue(row) {
-const valuesCr = num(
-first(row, ["Values in Cr", "Values_in_Cr", "ValuesInCr"], "")
-);
+- Value is always converted into Crores.
+-
+- Priority:
+-
+-
+  1. Values in Cr
+-
+  2. Value of Contract Per Annum INR / 10^7
+-
+  3. Revenue potential per month × 12 / 10^7
+     */
+     function getValue(row) {
+     const valuesCr = num(
+     first(row, ["Values in Cr", "Values_in_Cr", "ValuesInCr"], "")
+     );
 
 if (valuesCr) {
 return valuesCr;
 }
-
 const annual = num(
 row?.[
 "Value of Contract Per Annum INR"
 ]
 );
-
 if (annual) {
 return annual / 10000000;
 }
-
 const monthly = num(
 row?.[
 "Revenue potential per month (in INR)"
 ]
 );
-
 if (monthly) {
 return (
 monthly *
@@ -262,30 +207,24 @@ monthly *
 10000000
 );
 }
-
 return 0;
 }
-
 function formatCr(v) {
-return ₹${num(v).toFixed(2)} Cr;
+return `₹${num(v).toFixed(2)} Cr`;
 }
-
 function formatInt(v) {
 return Math.round(
 num(v)
 ).toLocaleString("en-IN");
 }
-
 function formatPct(v) {
-return ${(
+return `${(
     num(v) * 100
-  ).toFixed(1)}%;
+  ).toFixed(1)}%`;
 }
-
 /* =========================================================
 GENERIC FIELD HELPER
 ========================================================= */
-
 function normalizeHeaderKey(value) {
 return String(value ?? "")
 .replace(/\uFEFF/g, "")
@@ -293,7 +232,6 @@ return String(value ?? "")
 .toLowerCase()
 .replace(/[\s_-\u2013\u2014]+/g, "");
 }
-
 function first(
 row,
 keys,
@@ -303,21 +241,17 @@ for (const key of keys) {
 const value = text(row?.[key]);
 if (value) return value;
 }
-
 const normalizedKeys = keys.map(normalizeHeaderKey);
 for (const rowKey of Object.keys(row || {})) {
 if (!normalizedKeys.includes(normalizeHeaderKey(rowKey))) continue;
 const value = text(row?.[rowKey]);
 if (value) return value;
 }
-
 return fallback;
 }
-
 /* =========================================================
 FIELD GETTERS
 ========================================================= */
-
 function getOwner(row) {
 return first(
 row,
@@ -328,51 +262,46 @@ row,
 ]
 );
 }
+/*
+
+- IMPORTANT:
+- PCS Vertical comes directly from the
+- PCS Vertical column in the Opportunities data.
+  */
+  function getPCSVertical(row) {
+  // Read directly from the Opportunities dataset's PCS Vertical field.
+  // Header normalization handles Excel whitespace/BOM/case variations.
+  return first(
+  row,
+  [
+  "PCS Vertical",
+  "PCS vertical",
+  "PCS_Vertical",
+  "PCS Vertical ",
+  ]
+  );
+  }
 
 /*
 
-IMPORTANT:
-
-PCS Vertical comes directly from the
-
-PCS Vertical column in the Opportunities data.
-*/
-function getPCSVertical(row) {
-// Read directly from the Opportunities dataset's PCS Vertical field.
-// Header normalization handles Excel whitespace/BOM/case variations.
-return first(
-row,
-[
-"PCS Vertical",
-"PCS vertical",
-"PCS_Vertical",
-"PCS Vertical ",
-]
-);
-}
-
-/*
-
-Services come directly from Services Required.
-
-Capability Required is retained only as a
-
-fallback for older datasets.
-*/
-function getService(row) {
-return first(
-row,
-[
-"Services Required",
-"Services required",
-"services required",
-"Services",
-"services",
-"Capability Required",
-"Capability required",
-]
-);
-}
+- Services come directly from Services Required.
+- Capability Required is retained only as a
+- fallback for older datasets.
+  */
+  function getService(row) {
+  return first(
+  row,
+  [
+  "Services Required",
+  "Services required",
+  "services required",
+  "Services",
+  "services",
+  "Capability Required",
+  "Capability required",
+  ]
+  );
+  }
 
 function getRawWinReason(row) {
 return first(
@@ -385,11 +314,9 @@ row,
 ""
 );
 }
-
 /* =========================================================
 DEAL SIZE BANDS
 ========================================================= */
-
 const DEAL_SIZE_BANDS = [
 {
 name: "0–1 Cr",
@@ -422,23 +349,18 @@ min: 20,
 max: Infinity,
 },
 ];
-
 function getDealSize(row) {
 const value = getValue(row);
-
 const band = DEAL_SIZE_BANDS.find(
 (item) =>
 value >= item.min &&
 value < item.max
 );
-
 return band?.name || "Unknown";
 }
-
 /* =========================================================
 REGION STANDARDIZATION
 ========================================================= */
-
 function getStandardizedRegion(row) {
 const raw = first(
 row,
@@ -450,13 +372,10 @@ row,
 )
 .toLowerCase()
 .trim();
-
 if (!raw) {
 return "Unknown";
 }
-
 /* PAN INDIA */
-
 if (
 raw.includes("pan india") ||
 raw.includes("pan-india") ||
@@ -466,7 +385,6 @@ raw.includes("all over india")
 ) {
 return "Pan India";
 }
-
 const north = [
 "north",
 "delhi",
@@ -481,7 +399,6 @@ const north = [
 "rajasthan",
 "chandigarh",
 ].some((x) => raw.includes(x));
-
 const south = [
 "south",
 "bangalore",
@@ -497,7 +414,6 @@ const south = [
 "andhra pradesh",
 "coimbatore",
 ].some((x) => raw.includes(x));
-
 const east = [
 "east",
 "kolkata",
@@ -511,7 +427,6 @@ const east = [
 "bhubaneswar",
 "patna",
 ].some((x) => raw.includes(x));
-
 const west = [
 "west",
 "mumbai",
@@ -526,52 +441,40 @@ const west = [
 "indore",
 "nagpur",
 ].some((x) => raw.includes(x));
-
 const directions = [
 north,
 south,
 east,
 west,
 ].filter(Boolean).length;
-
 if (directions > 1) {
 return "Multiple Locations";
 }
-
 if (north) {
 return "North";
 }
-
 if (south) {
 return "South";
 }
-
 if (east) {
 return "East";
 }
-
 if (west) {
 return "West";
 }
-
 return "Unknown";
 }
-
 /* =========================================================
 WIN REASON STANDARDIZATION
 ========================================================= */
-
 function standardizeWinReason(row) {
 const raw = getRawWinReason(row);
-
 if (!raw) {
 return "Unknown";
 }
-
 const value = raw
 .toLowerCase()
 .trim();
-
 if (
 !value ||
 value === "n/a" ||
@@ -582,104 +485,81 @@ value === "?"
 ) {
 return "Unknown";
 }
-
 /* CONSOLIDATION */
-
 if (
 /consolidat|restructur|relocat|merging|merge|warehouse.*shift|shift.*warehouse|larger warehouse|bigger space|moving to a larger/i
 .test(value)
 ) {
 return "Consolidation / Restructuring / Relocation";
 }
-
 /* SPACE / FACILITY */
-
 if (
 /space|warehouse caught fire|fire system|warehouse option|facility|wh size|wh size expansion|space crunch|additional space|bigger.*space|larger.*space|poor condition of wh/i
 .test(value)
 ) {
 return "Space / Facility Constraint";
 }
-
 /* CONTRACT */
-
 if (
 /contract|agreement|annual rfq|rfq|bidding|auction|3+2|term expire|term over|yearly bidding|renewal|encirclement/i
 .test(value)
 ) {
 return "Contract / Agreement Cycle";
 }
-
 /* PROFESSIONAL 3PL */
-
 if (
 /professional.*3pl|move to 3pl|move.*professional|outsource.*3pl|organised|organized.*player|professional player|3pl player|3pl model|shift to 3pl|formal player|well organised/i
 .test(value)
 ) {
 return "Moving to Organized / Professional 3PL";
 }
-
 /* VENDOR DIVERSIFICATION */
-
 if (
 /reducing depend|reduce depend|adding.*vendor|adding.*player|new vendor addition|addition of new|multiple ff|multiple.*vendor|more.*vendor|more.*player|introducing new vendor|vehicle placement|new suppliers/i
 .test(value)
 ) {
 return "Vendor Diversification / Reducing Dependency";
 }
-
 /* COST / COMMERCIAL */
-
 if (
 /cost|commercial|pricing|price|rate|rates|competitive|competative|saving|savings|costing|cost effective|cost reduction|cost optimisation|cost optimization|better price|better pricing|rfq price/i
 .test(value)
 ) {
 return "Cost / Commercial";
 }
-
 /* SERVICE QUALITY */
-
 if (
 /service|better services|better service|service issue|service issues|service quality|service improvement|poor service|enhance service|service level|customer experience/i
 .test(value)
 ) {
 return "Service Quality";
 }
-
 /* OPERATIONAL ISSUES */
-
 if (
 /operation|operational|productivity|process|manpower|visibility|delay in delivery|transportation delay|manage b2c|inefficien|control over operation|process adherence|smooth operation|attrition/i
 .test(value)
 ) {
 return "Operational Issues";
 }
-
 /* NEW REQUIREMENT / EXPANSION */
-
 if (
 /expansion|new requirement|new lane|new start|new launch|new setup|new set-up|new location|new dc|new warehouse|volume increase|volume growth|scaling|increase in demand|production capacity|looking for new scm|looking for a new scm|looking for new supply|new opportunity|requirement|business expansion|growth|additional requirement/i
 .test(value)
 ) {
 return "New Requirement / Expansion";
 }
-
 /* OTHER */
-
 if (
 /inhouse|temporary requirement|software interface|relationship|bosch global policy|inventory management|warehouse management|primarily focus|to be checked/i
 .test(value)
 ) {
 return "Other / Unclear";
 }
-
 return "Other / Unclear";
 }
-
 /* =========================================================
 MULTI SELECT
 ========================================================= */
-
 function MultiSelect({
 label,
 values,
@@ -690,7 +570,6 @@ const [
 open,
 setOpen,
 ] = useState(false);
-
 function toggle(value) {
 if (selected.includes(value)) {
 setSelected(
@@ -705,22 +584,18 @@ value,
 ]);
 }
 }
-
 function selectAll() {
 setSelected(values);
 }
-
 function clearAll() {
 setSelected([]);
 }
-
 const display =
 selected.length === 0
-? All ${label}
+? `All ${label}`
 : selected.length === 1
 ? selected[0]
-: ${selected.length} ${label} selected;
-
+: `${selected.length} ${label} selected`;
 return (
 <div className="relative">
 
@@ -894,11 +769,9 @@ return (
 
 );
 }
-
 /* =========================================================
 CHART LABELS
 ========================================================= */
-
 function CountLabel({
 x,
 y,
@@ -911,7 +784,6 @@ value === undefined
 ) {
 return null;
 }
-
 return (
 <text
 x={x + width / 2}
@@ -925,7 +797,6 @@ fontWeight={700}
 </text>
 );
 }
-
 function ValueLabel({
 x,
 y,
@@ -938,7 +809,6 @@ value === undefined
 ) {
 return null;
 }
-
 return (
 <text
 x={x + width / 2}
@@ -952,26 +822,24 @@ fontWeight={700}
 </text>
 );
 }
-
 /*
 
-Horizontal-bar label.
-
-Used for services if required.
-*/
-function HorizontalCountLabel({
-x,
-y,
-width,
-height,
-value,
-}) {
-if (
-value === null ||
-value === undefined
-) {
-return null;
-}
+- Horizontal-bar label.
+- Used for services if required.
+  */
+  function HorizontalCountLabel({
+  x,
+  y,
+  width,
+  height,
+  value,
+  }) {
+  if (
+  value === null ||
+  value === undefined
+  ) {
+  return null;
+  }
 
 return (
 <text
@@ -985,7 +853,6 @@ fontWeight={700}
 </text>
 );
 }
-
 function HorizontalValueLabel({
 x,
 y,
@@ -999,7 +866,6 @@ value === undefined
 ) {
 return null;
 }
-
 return (
 <text
 x={x + width + 8}
@@ -1012,11 +878,9 @@ fontWeight={700}
 </text>
 );
 }
-
 /* =========================================================
 TOOLTIP
 ========================================================= */
-
 function CustomTooltip({
 active,
 payload,
@@ -1028,7 +892,6 @@ if (
 ) {
 return null;
 }
-
 return (
 <div
    className="
@@ -1089,17 +952,14 @@ return (
 
 );
 }
-
 /* =========================================================
 AGGREGATION
 ========================================================= */
-
 function aggregate(
 rows,
 getter
 ) {
 const map = new Map();
-
 rows.forEach((row) => {
 
 const key =
@@ -1126,25 +986,20 @@ item.value +=
   getValue(row);
 
 });
-
 return [
 ...map.values(),
 ];
 }
-
 /* =========================================================
 COMPONENT
 ========================================================= */
-
 export default function WonAnalysis({
 data,
 settings = {},
 }) {
-
 /* =======================================================
 WON OPPORTUNITIES SOURCE
 ======================================================= */
-
 const rows = useMemo(() => {
 
 const source =
@@ -1187,70 +1042,56 @@ return source.filter(
 );
 
 }, [data]);
-
 /* =======================================================
 FILTER STATE
 ======================================================= */
-
 const [
 search,
 setSearch,
 ] = useState("");
-
 const [
 selectedWeeks,
 setSelectedWeeks,
 ] = useState([]);
-
 const [
 selectedMonths,
 setSelectedMonths,
 ] = useState([]);
-
 const [
 selectedYears,
 setSelectedYears,
 ] = useState([]);
-
 const [
 selectedQuarters,
 setSelectedQuarters,
 ] = useState([]);
-
 const [
 selectedOwners,
 setSelectedOwners,
 ] = useState([]);
-
 const [
 selectedPCS,
 setSelectedPCS,
 ] = useState([]);
-
 const [
 selectedRegions,
 setSelectedRegions,
 ] = useState([]);
-
 const [
 selectedDealSizes,
 setSelectedDealSizes,
 ] = useState([]);
-
 const [
 selectedReasons,
 setSelectedReasons,
 ] = useState([]);
-
 const [
 selectedServices,
 setSelectedServices,
 ] = useState([]);
-
 /* =======================================================
 FILTER OPTIONS
 ======================================================= */
-
 const options = useMemo(() => {
 
 const unique =
@@ -1444,11 +1285,9 @@ return {
 };
 
 }, [rows]);
-
 /* =======================================================
 FILTER MATCH
 ======================================================= */
-
 function matches(
 selected,
 value
@@ -1458,11 +1297,9 @@ selected.length === 0 ||
 selected.includes(value)
 );
 }
-
 /* =======================================================
 FILTERED DATA
 ======================================================= */
-
 const filtered = useMemo(() => {
 
 const q =
@@ -1575,11 +1412,9 @@ selectedDealSizes,
 selectedReasons,
 selectedServices,
 ]);
-
 /* =======================================================
 KPIs
 ======================================================= */
-
 const metrics = useMemo(() => {
 
 const values =
@@ -1667,11 +1502,9 @@ return {
 };
 
 }, [filtered]);
-
 /* =======================================================
 WIN BY DEAL SIZE
 ======================================================= */
-
 const dealSizeData = useMemo(() => {
 
 return DEAL_SIZE_BANDS.map(
@@ -1711,11 +1544,9 @@ return DEAL_SIZE_BANDS.map(
 );
 
 }, [filtered]);
-
 /* =======================================================
 OTHER CHART DATA
 ======================================================= */
-
 const reasonData =
 useMemo(
 () =>
@@ -1728,7 +1559,6 @@ b.value - a.value
 ),
 [filtered]
 );
-
 const pcsData =
 useMemo(
 () =>
@@ -1741,7 +1571,6 @@ b.value - a.value
 ),
 [filtered]
 );
-
 const regionData =
 useMemo(
 () =>
@@ -1801,11 +1630,9 @@ b.value - a.value
 ),
 [filtered]
 );
-
 /* =======================================================
 YEARLY DATA
 ======================================================= */
-
 const yearly =
 useMemo(() => {
 
@@ -1866,16 +1693,13 @@ useMemo(() => {
 /* =======================================================
 CHART DATA
 ======================================================= */
-
 // Show the complete dataset on each chart; no range sliders on this page.
 const visibleReasons = reasonData;
 const visiblePCS = pcsData;
 const visibleServices = serviceData;
-
 /* =======================================================
 RESET
 ======================================================= */
-
 const activeFilterCount =
 [
 selectedWeeks,
@@ -1901,7 +1725,6 @@ search
 ? 1
 : 0
 );
-
 function clearFilters() {
 
 setSearch("");
@@ -1927,11 +1750,9 @@ setSelectedReasons([]);
 setSelectedServices([]);
 
 }
-
 /* =======================================================
 RENDER
 ======================================================= */
-
 return (
 
 <div
