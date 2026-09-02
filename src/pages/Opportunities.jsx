@@ -40,43 +40,6 @@ import SectionHeader from "../components/dashboard/SectionHeader";
 /* =========================================================
    BASIC HELPERS
 ========================================================= */
-/* =========================================================
-   HEADER-NORMALIZED COLUMN ACCESS
-   Keeps the page compatible with Excel and CSV headers such as
-   "Opportunity ID", "Opportunity_ID", "OpportunityID", etc.
-========================================================= */
-
-function normalizeHeader(value) {
-  return String(value ?? "")
-    .replace(/^\uFEFF/, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
-}
-
-function getColumnValue(row, possibleNames = []) {
-  if (!row || typeof row !== "object") return "";
-
-  const entries = Object.entries(row);
-  const normalizedMap = new Map(
-    entries.map(([key, value]) => [normalizeHeader(key), value])
-  );
-
-  for (const name of possibleNames) {
-    const normalizedName = normalizeHeader(name);
-    if (normalizedMap.has(normalizedName)) {
-      return normalizedMap.get(normalizedName);
-    }
-  }
-
-  return "";
-}
-
-function column(row, ...names) {
-  return getColumnValue(row, names);
-}
-
 
 function text(value) {
   if (value === null || value === undefined) return "";
@@ -201,10 +164,10 @@ function getOpportunityValue(row) {
   const croreValue = valueColumn ? number(row[valueColumn]) : 0;
   if (croreValue > 0) return croreValue * 10000000;
 
-  const annual = number(column(row, "Value of Contract Per Annum INR", "Value_of_Contract_Per_Annum_INR", "Value of Contract Per Annum"));
+  const annual = number(row["Value of Contract Per Annum INR"]);
   if (annual > 0) return annual;
 
-  const monthly = number(column(row, "Revenue potential per month (in INR)", "Revenue_potential_per_month_(in_INR)", "Revenue potential per month"));
+  const monthly = number(row["Revenue potential per month (in INR)"]);
   if (monthly > 0) return monthly * 12;
 
   return 0;
@@ -218,10 +181,10 @@ function getOpportunityValueCrores(row) {
   const croreValue = valueColumn ? number(row[valueColumn]) : 0;
   if (croreValue > 0) return croreValue;
 
-  const annual = number(column(row, "Value of Contract Per Annum INR", "Value_of_Contract_Per_Annum_INR", "Value of Contract Per Annum"));
+  const annual = number(row["Value of Contract Per Annum INR"]);
   if (annual > 0) return annual / 10000000;
 
-  const monthly = number(column(row, "Revenue potential per month (in INR)", "Revenue_potential_per_month_(in_INR)", "Revenue potential per month"));
+  const monthly = number(row["Revenue potential per month (in INR)"]);
   if (monthly > 0) return (monthly * 12) / 10000000;
 
   return 0;
@@ -232,17 +195,17 @@ function getOpportunityValueCrores(row) {
 ========================================================= */
 
 function getAge(row) {
-  const age = number(column(row, "Age"));
+  const age = number(row["Age"]);
 
   if (
     age >= 0 &&
-    column(row, "Age") !== null &&
-    column(row, "Age") !== ""
+    row["Age"] !== null &&
+    row["Age"] !== ""
   ) {
     return age;
   }
 
-  const created = column(row, "Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate", "Created Date");
+  const created = row["Opportunity Created Date"];
 
   if (created) {
     const date = new Date(created);
@@ -282,7 +245,7 @@ function getAgeBucket(
 ========================================================= */
 
 function getOutcome(row) {
-  const stage = text(column(row, "Opportunity Stage", "Opportunity_Stage", "OpportunityStage", "Stage")).toLowerCase().replace(/\s+/g, " ").trim();
+  const stage = text(row["Opportunity Stage"]).toLowerCase().replace(/\s+/g, " ").trim();
 
   if (["won", "onboarded", "1st invoice", "agreement", "loi received"].includes(stage)) {
     return "Won";
@@ -293,7 +256,7 @@ function getOutcome(row) {
 }
 
 function getStage(row) {
-  const rawStage = text(column(row, "Opportunity Stage", "Opportunity_Stage", "OpportunityStage", "Stage"));
+  const rawStage = text(row["Opportunity Stage"]);
   if (!rawStage) return "Unknown";
 
   // Canonical presentation labels used everywhere in the dashboard.
@@ -310,16 +273,16 @@ function getStage(row) {
 }
 
 function getOwner(row) {
-  return text(column(row, "Assigned To", "Assigned_To", "AssignedTo", "Owner")) || "Unassigned";
+  return text(row["Assigned To"]) || "Unassigned";
 }
 
 function getIndustry(row) {
-  return text(column(row, "Industry")) || "Unknown";
+  return text(row["Industry"]) || "Unknown";
 }
 
 function getPCSVertical(row) {
   return (
-    text(column(row, "PCS Vertical", "PCS_Vertical", "PCSVertical", "PCS  Vertical")) ||
+    text(row["PCS Vertical"]) ||
     text(row["PCS  Vertical"]) ||
     text(row["PCS_Vertical"]) ||
     "Unknown"
@@ -327,17 +290,108 @@ function getPCSVertical(row) {
 }
 
 function parseDate(value) {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
   if (typeof value === "number" && value > 20000 && value < 60000) {
     const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  const date = new Date(value);
+
+  const raw = String(value).replace(/^\uFEFF/, "").trim();
+  if (!raw) return null;
+
+  const isoMatch = raw.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+  );
+
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    const hours = Number(isoMatch[4] || 0);
+    const minutes = Number(isoMatch[5] || 0);
+    const seconds = Number(isoMatch[6] || 0);
+
+    const date = new Date(year, month, day, hours, minutes, seconds);
+
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month &&
+      date.getDate() === day
+    ) {
+      return date;
+    }
+  }
+
+  const dmyMatch = raw.match(
+    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+  );
+
+  if (dmyMatch) {
+    const day = Number(dmyMatch[1]);
+    const month = Number(dmyMatch[2]) - 1;
+    const year = Number(dmyMatch[3]);
+    const hours = Number(dmyMatch[4] || 0);
+    const minutes = Number(dmyMatch[5] || 0);
+    const seconds = Number(dmyMatch[6] || 0);
+
+    const date = new Date(year, month, day, hours, minutes, seconds);
+
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month &&
+      date.getDate() === day
+    ) {
+      return date;
+    }
+  }
+
+  const monthTextMatch = raw.match(
+    /^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+  );
+
+  if (monthTextMatch) {
+    const months = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    };
+
+    const day = Number(monthTextMatch[1]);
+    const month = months[monthTextMatch[2].slice(0, 3).toLowerCase()];
+    const year = Number(monthTextMatch[3]);
+
+    if (month !== undefined) {
+      const date = new Date(
+        year,
+        month,
+        day,
+        Number(monthTextMatch[4] || 0),
+        Number(monthTextMatch[5] || 0),
+        Number(monthTextMatch[6] || 0)
+      );
+
+      if (
+        date.getFullYear() === year &&
+        date.getMonth() === month &&
+        date.getDate() === day
+      ) {
+        return date;
+      }
+    }
+  }
+
+  const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function getCreatedDate(row) {
-  return parseDate(column(row, "Opportunity Created Date", "Opportunity_Created_Date", "OpportunityCreatedDate", "Created Date"));
+  return parseDate(row["Opportunity Created Date"]);
 }
 
 function getISOWeekInfo(date) {
@@ -393,7 +447,7 @@ function getFiscalQuarterInfo(row) {
 }
 
 function getRegion(row) {
-  const raw = text(column(row, "Customer Service required region", "Customer_Service_required_region", "Customer Service Required Region") || column(row, "PCS User Region", "PCS_User_Region", "PCSUserRegion")).toLowerCase();
+  const raw = text(row["Customer Service required region"] || row["PCS User Region"]).toLowerCase();
   if (!raw) return "Unknown";
 
   const normalized = raw.replace(/&/g, " and ").replace(/[,/;|]+/g, " ").replace(/[-]+/g, " ");
@@ -418,7 +472,7 @@ function getRegion(row) {
 }
 
 function getUpdatedTime(row) {
-  return text(column(row, "Updated Time", "Updated_Time", "UpdatedTime") || column(row, "Updated Time", "Updated_Time", "UpdatedTime") || column(row, "Updated Time", "Updated_Time", "UpdatedTime"));
+  return text(row["Updated Time"] || row["Updated time"] || row["updated_time"]);
 }
 
 function getLatestUpdatedTime(rows) {
@@ -1191,9 +1245,9 @@ function Opportunities({
     const matchesAny = (selected, value) => selected.length === 0 || selected.includes(value);
 
     return opportunities.filter((row) => {
-      const opportunityName = text(column(row, "Opportunity Name", "Opportunity_Name", "OpportunityName"));
-      const customer = text(column(row, "Customer name", "Customer_name", "CustomerName"));
-      const opportunityId = text(column(row, "Opportunity ID", "Opportunity_ID", "OpportunityID", "Opportunity Id"));
+      const opportunityName = text(row["Opportunity Name"]);
+      const customer = text(row["Customer name"]);
+      const opportunityId = text(row["Opportunity ID"]);
 
       const matchesSearch = !query ||
         opportunityName.toLowerCase().includes(query) ||
@@ -3338,15 +3392,15 @@ function Opportunities({
 
                     return (
                       <div
-                        key={column(row, "Opportunity ID", "Opportunity_ID", "OpportunityID", "Opportunity Id") || index}
+                        key={row["Opportunity ID"] || index}
                         className="grid grid-cols-[minmax(0,1fr)_120px_180px_190px] gap-4 items-center px-5 py-3.5 rounded-xl bg-rose-50 border border-rose-100 min-h-[58px]"
                       >
                         <div className="min-w-0">
                           <p className="font-semibold text-sm text-slate-800 break-words">
-                            {text(column(row, "Opportunity Name", "Opportunity_Name", "OpportunityName")) || "Unnamed opportunity"}
+                            {text(row["Opportunity Name"]) || "Unnamed opportunity"}
                           </p>
                           <p className="text-xs text-slate-400 truncate mt-1">
-                            {text(column(row, "Customer name", "Customer_name", "CustomerName")) || "Unknown customer"}
+                            {text(row["Customer name"]) || "Unknown customer"}
                           </p>
                         </div>
                         <p className="text-right text-sm font-semibold text-rose-600 whitespace-nowrap">{age} days</p>

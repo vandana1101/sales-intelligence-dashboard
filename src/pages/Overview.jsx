@@ -288,6 +288,161 @@ function getValueAxisFormatter(
 
 
 /* =========================================================
+   MONTH HELPERS
+========================================================= */
+
+/*
+ * Get the actual Opportunity Created Date.
+ *
+ * IMPORTANT:
+ * We intentionally do NOT use Opportunity Month (G)
+ * for monthly aggregation.
+ *
+ * The source date is the authoritative field.
+ */
+
+function getOpportunityCreatedDate(row) {
+  return getColumnValue(
+    row,
+    [
+      "Opportunity Created Date",
+      "Opportunity Created",
+      "Created Date",
+      "CreatedDate",
+    ]
+  );
+}
+
+
+/*
+ * Convert a date value into:
+ *
+ * YYYY-MM
+ *
+ * Examples:
+ * 15/02/2023 -> 2023-02
+ * 15-02-2023 -> 2023-02
+ * 2023-02-15 -> 2023-02
+ */
+
+function getMonthLabel(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "Unknown";
+  }
+
+  const raw =
+    String(value).trim();
+
+
+  if (!raw) {
+    return "Unknown";
+  }
+
+
+  /*
+   * Already-normalized date:
+   *
+   * 2023-02-15
+   * 2023-02-15 10:30:00
+   */
+
+  const normalizedMatch =
+    raw.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})/
+    );
+
+
+  if (normalizedMatch) {
+
+    const year =
+      Number(normalizedMatch[1]);
+
+    const month =
+      Number(normalizedMatch[2]);
+
+
+    if (
+      Number.isFinite(year) &&
+      month >= 1 &&
+      month <= 12
+    ) {
+
+      return `${year}-${String(
+        month
+      ).padStart(2, "0")}`;
+
+    }
+
+  }
+
+
+  /*
+   * DD/MM/YYYY
+   * DD-MM-YYYY
+   */
+
+  const dmyMatch =
+    raw.match(
+      /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/
+    );
+
+
+  if (dmyMatch) {
+
+    const month =
+      Number(dmyMatch[2]);
+
+    const year =
+      Number(dmyMatch[3]);
+
+
+    if (
+      month >= 1 &&
+      month <= 12 &&
+      Number.isFinite(year)
+    ) {
+
+      return `${year}-${String(
+        month
+      ).padStart(2, "0")}`;
+
+    }
+
+  }
+
+
+  /*
+   * Final fallback for values that JavaScript
+   * can parse as a valid date.
+   */
+
+  const parsed =
+    new Date(raw);
+
+
+  if (
+    !Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+
+    return `${parsed.getFullYear()}-${String(
+      parsed.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+  }
+
+
+  return "Unknown";
+}
+
+
+/* =========================================================
    MAIN COMPONENT
 ========================================================= */
 
@@ -414,6 +569,16 @@ function Overview({
 
   /* =======================================================
      MONTHLY PIPELINE DATA
+
+     IMPORTANT:
+     Always derive the month from Opportunity Created Date.
+
+     Do NOT rely on Opportunity Month (G), because that is
+     a calculated/derived field and may contain incorrect
+     month assignments.
+
+     This ensures the monthly count is based on the actual
+     source opportunity creation date.
   ======================================================= */
 
   const monthlyMap = {};
@@ -422,19 +587,16 @@ function Overview({
   opportunities.forEach(
     (row) => {
 
+      const createdDate =
+        getOpportunityCreatedDate(
+          row
+        );
+
+
       const month =
-        text(
-          getColumnValue(
-            row,
-            [
-              "Opportunity Month (G)",
-              "Opportunity Month",
-              "Opportunity_Month",
-              "Opportunity-Month",
-            ]
-          )
-        ) ||
-        "Unknown";
+        getMonthLabel(
+          createdDate
+        );
 
 
       if (!monthlyMap[month]) {
@@ -463,9 +625,35 @@ function Overview({
   );
 
 
+  /*
+   * Sort the monthly data chronologically.
+   *
+   * Unknown is always placed at the end.
+   */
+
   const monthlyData =
     Object.values(
       monthlyMap
+    ).sort(
+      (a, b) => {
+
+        if (
+          a.month === "Unknown"
+        ) {
+          return 1;
+        }
+
+        if (
+          b.month === "Unknown"
+        ) {
+          return -1;
+        }
+
+        return a.month.localeCompare(
+          b.month
+        );
+
+      }
     );
 
 
@@ -1095,6 +1283,7 @@ function Overview({
         </p>
 
       </div>
+
 
     </div>
 
