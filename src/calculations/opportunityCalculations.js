@@ -13,18 +13,16 @@ import {
 
 /*
  * Normalize column names so Excel and CSV files with
- * slightly different spacing/capitalization can still
- * be processed consistently.
+ * slightly different spacing/capitalization can still be
+ * processed consistently.
  */
 function normalizeHeader(value) {
-
   return String(value ?? "")
     .replace(/^\uFEFF/, "")
     .trim()
     .toLowerCase()
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
-
 }
 
 
@@ -36,54 +34,34 @@ function getColumnValue(
   row,
   possibleNames
 ) {
-
   if (!row) {
     return null;
   }
 
+  const keys = Object.keys(row);
 
-  const keys =
-    Object.keys(row);
+  const normalizedKeys = keys.reduce(
+    (map, key) => {
+      map[normalizeHeader(key)] = key;
+      return map;
+    },
+    {}
+  );
 
-
-  const normalizedKeys =
-    keys.reduce(
-      (map, key) => {
-
-        map[
-          normalizeHeader(key)
-        ] = key;
-
-        return map;
-
-      },
-      {}
-    );
-
-
-  for (
-    const name of possibleNames
-  ) {
-
+  for (const name of possibleNames) {
     const actualKey =
       normalizedKeys[
         normalizeHeader(name)
       ];
 
-
     if (
       actualKey !== undefined
     ) {
-
       return row[actualKey];
-
     }
-
   }
 
-
   return null;
-
 }
 
 
@@ -102,7 +80,6 @@ function getColumnValue(
 export function getReferenceDate(
   rows
 ) {
-
   const updatedDates =
     rows
       .map((row) =>
@@ -116,7 +93,6 @@ export function getReferenceDate(
         )
       )
       .filter(Boolean);
-
 
   const opportunityDates =
     rows
@@ -132,13 +108,11 @@ export function getReferenceDate(
       )
       .filter(Boolean);
 
-
   return (
     maxDate(updatedDates) ||
     maxDate(opportunityDates) ||
     new Date()
   );
-
 }
 
 
@@ -153,7 +127,6 @@ export function calculateAge(
   row,
   referenceDate
 ) {
-
   const created =
     parseDate(
       getColumnValue(
@@ -166,16 +139,12 @@ export function calculateAge(
       )
     );
 
-
   if (
     !created ||
     !referenceDate
   ) {
-
     return null;
-
   }
-
 
   return Math.max(
     0,
@@ -187,7 +156,6 @@ export function calculateAge(
         (1000 * 60 * 60 * 24)
     )
   );
-
 }
 
 
@@ -203,7 +171,6 @@ export function enrichOpportunity(
   row,
   referenceDate
 ) {
-
   const enriched = {
     ...row,
   };
@@ -223,7 +190,6 @@ export function enrichOpportunity(
       ]
     );
 
-
   const rfqReceivedDate =
     getColumnValue(
       row,
@@ -233,7 +199,6 @@ export function enrichOpportunity(
         "RFQ Received",
       ]
     );
-
 
   const solutionRequestDate =
     getColumnValue(
@@ -245,7 +210,6 @@ export function enrichOpportunity(
       ]
     );
 
-
   const solutionReceivedDate =
     getColumnValue(
       row,
@@ -255,7 +219,6 @@ export function enrichOpportunity(
         "Solution Received",
       ]
     );
-
 
   const bfApprovalDate =
     getColumnValue(
@@ -267,7 +230,6 @@ export function enrichOpportunity(
       ]
     );
 
-
   const rfqTargetDate =
     getColumnValue(
       row,
@@ -277,7 +239,6 @@ export function enrichOpportunity(
         "RFQ Target Date",
       ]
     );
-
 
   const proposalSubmittedDate =
     getColumnValue(
@@ -289,7 +250,6 @@ export function enrichOpportunity(
       ]
     );
 
-
   const dateWon =
     getColumnValue(
       row,
@@ -299,6 +259,27 @@ export function enrichOpportunity(
         "Won Date",
       ]
     );
+
+
+  // ------------------------------------------
+  // PARSED CREATED DATE
+  // ------------------------------------------
+  /*
+   * IMPORTANT:
+   *
+   * Excel can provide date values in a form that
+   * dateUtils can work with directly, while CSV
+   * normalization produces strings such as:
+   *
+   * 2022-03-23
+   * 2022-03-23 00:00:00
+   *
+   * Explicitly parse the Created Date once and use
+   * the parsed Date object for all date-based
+   * Opportunity grouping.
+   */
+  const parsedCreatedDate =
+    parseDate(createdDate);
 
 
   // ------------------------------------------
@@ -411,9 +392,11 @@ export function enrichOpportunity(
   enriched[
     "Opportunity Week (G)"
   ] =
-    formatOpportunityWeek(
-      createdDate
-    );
+    parsedCreatedDate
+      ? formatOpportunityWeek(
+          parsedCreatedDate
+        )
+      : null;
 
 
   // ------------------------------------------
@@ -423,9 +406,11 @@ export function enrichOpportunity(
   enriched[
     "Opportunity Month (G)"
   ] =
-    formatMonth(
-      createdDate
-    );
+    parsedCreatedDate
+      ? formatMonth(
+          parsedCreatedDate
+        )
+      : null;
 
 
   // ------------------------------------------
@@ -442,24 +427,19 @@ export function enrichOpportunity(
       rfqTargetDate
     );
 
-
   const proposalDate =
     parseDate(
       proposalSubmittedDate
     );
 
-
   if (
     !targetDate ||
     !proposalDate
   ) {
-
     enriched[
       "Delay in Proposal Submission Date (AU&BB)"
     ] = 0;
-
   } else {
-
     enriched[
       "Delay in Proposal Submission Date (AU&BB)"
     ] =
@@ -467,7 +447,6 @@ export function enrichOpportunity(
         proposalDate,
         targetDate
       );
-
   }
 
 
@@ -496,7 +475,6 @@ export function enrichOpportunity(
       ) || ""
     ).trim();
 
-
   if (
     [
       "Won",
@@ -505,34 +483,25 @@ export function enrichOpportunity(
       "Agreement",
     ].includes(stage)
   ) {
-
     enriched["Outcome bucket"] =
       "Won";
-
   } else if (
     stage === "Lost"
   ) {
-
     enriched["Outcome bucket"] =
       "Lost";
-
   } else if (
     stage === "Hold"
   ) {
-
     enriched["Outcome bucket"] =
       "Hold";
-
   } else {
-
     enriched["Outcome bucket"] =
       "Active/In Pipeline";
-
   }
 
 
   return enriched;
-
 }
 
 
@@ -546,26 +515,21 @@ export function enrichOpportunity(
 export function processOpportunities(
   rows
 ) {
-
   if (
     !rows ||
     !Array.isArray(rows) ||
     rows.length === 0
   ) {
-
     return {
       rows: [],
       referenceDate: null,
     };
-
   }
-
 
   const referenceDate =
     getReferenceDate(
       rows
     );
-
 
   const processedRows =
     rows.map((row) =>
@@ -575,10 +539,8 @@ export function processOpportunities(
       )
     );
 
-
   return {
     rows: processedRows,
     referenceDate,
   };
-
 }
