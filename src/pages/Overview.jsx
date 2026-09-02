@@ -81,32 +81,6 @@ function normalizeHeader(value) {
     .replace(/\s+/g, " ");
 }
 
-/*
- * PERFORMANCE:
- * Build a normalized column map once per row instead of scanning
- * Object.entries(row) + normalizing every header on every calculation.
- *
- * WeakMap keeps the cache attached to the row object without changing
- * the shape of the user's data or appearing in CSV exports.
- */
-const overviewRowColumnCache = new WeakMap();
-
-function getNormalizedRowColumns(row) {
-  if (!row || typeof row !== "object") return new Map();
-
-  const cached = overviewRowColumnCache.get(row);
-  if (cached) return cached;
-
-  const columns = new Map();
-
-  Object.keys(row).forEach((key) => {
-    columns.set(normalizeHeader(key), key);
-  });
-
-  overviewRowColumnCache.set(row, columns);
-  return columns;
-}
-
 
 /* =========================================================
    FLEXIBLE COLUMN LOOKUP
@@ -120,19 +94,24 @@ function getColumnValue(
     return undefined;
   }
 
-  const columns = getNormalizedRowColumns(row);
+  const entries = Object.entries(row);
 
-  for (const possibleName of possibleNames) {
-    const actualKey = columns.get(
-      normalizeHeader(possibleName)
+  const targetNames =
+    possibleNames.map(
+      normalizeHeader
     );
 
-    if (actualKey !== undefined) {
-      return row[actualKey];
-    }
-  }
+  const match =
+    entries.find(
+      ([key]) =>
+        targetNames.includes(
+          normalizeHeader(key)
+        )
+    );
 
-  return undefined;
+  return match
+    ? match[1]
+    : undefined;
 }
 
 
@@ -140,13 +119,7 @@ function getColumnValue(
    OPPORTUNITY VALUE
 ========================================================= */
 
-const overviewOpportunityValueCache = new WeakMap();
-
 function getOpportunityValue(row) {
-  if (!row || typeof row !== "object") return 0;
-
-  const cached = overviewOpportunityValueCache.get(row);
-  if (cached !== undefined) return cached;
 
   /*
    * Preferred:
@@ -167,7 +140,6 @@ function getOpportunityValue(row) {
 
 
   if (annual > 0) {
-    overviewOpportunityValueCache.set(row, annual);
     return annual;
   }
 
@@ -191,9 +163,7 @@ function getOpportunityValue(row) {
     );
 
 
-  const result = monthly * 12;
-  overviewOpportunityValueCache.set(row, result);
-  return result;
+  return monthly * 12;
 
 }
 
@@ -508,154 +478,302 @@ function Overview({
     [];
 
 
-  const derived = useMemo(() => {
-    /* =======================================================
-       ALL OVERVIEW CALCULATIONS
+  /* =======================================================
+     KPI VALUES
+  ======================================================= */
 
-       PERFORMANCE:
-       This block runs only when the underlying datasets or the
-       relevant aging setting changes. Previously every calculation
-       ran again on every render.
-    ======================================================= */
-
-    const pipelineValue = opportunities.reduce(
-      (sum, row) => sum + getOpportunityValue(row),
+  const pipelineValue =
+    opportunities.reduce(
+      (sum, row) =>
+        sum +
+        getOpportunityValue(row),
       0
     );
 
-    let won = 0;
-    let active = 0;
-    let agingRisk = 0;
 
-    const monthlyMap = {};
-    const outcomeMap = {};
-    const ageBuckets = {
-      "<30": 0,
-      "30–60": 0,
-      "60–90": 0,
-      ">90": 0,
-    };
+  const won =
+    opportunities.filter(
+      (row) => {
 
-    opportunities.forEach((row) => {
-      const outcome = text(
-        getColumnValue(row, [
-          "Outcome bucket",
-          "Outcome Bucket",
-          "Outcome_Bucket",
-          "Outcome-Bucket",
-          "Outcome",
-        ])
-      ).toLowerCase();
+        const outcome =
+          text(
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
+          ).toLowerCase();
 
-      if (
-        outcome.includes("won") &&
-        !outcome.includes("lost")
-      ) {
-        won += 1;
+
+        return (
+          outcome.includes("won") &&
+          !outcome.includes("lost")
+        );
+
       }
+    ).length;
 
-      if (outcome.includes("active")) {
-        active += 1;
+
+  const active =
+    opportunities.filter(
+      (row) => {
+
+        const outcome =
+          text(
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
+          ).toLowerCase();
+
+
+        return outcome.includes(
+          "active"
+        );
+
       }
+    ).length;
 
-      const age = number(
-        getColumnValue(row, [
-          "Age",
-          "Opportunity Age",
-        ])
-      );
 
-      if (age > agingCritical) {
-        agingRisk += 1;
-      }
+  const agingCritical =
+    Number(
+      settings?.opportunityRisk?.ageCritical
+    ) || 90;
+
+
+  const agingRisk =
+    opportunities.filter(
+      (row) =>
+        number(
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
+        ) > agingCritical
+    ).length;
+
+
+  /* =======================================================
+     MONTHLY PIPELINE DATA
+
+     IMPORTANT:
+     Always derive the month from Opportunity Created Date.
+
+     Do NOT rely on Opportunity Month (G), because that is
+     a calculated/derived field and may contain incorrect
+     month assignments.
+
+     This ensures the monthly count is based on the actual
+     source opportunity creation date.
+  ======================================================= */
+
+  const monthlyMap = {};
+
+
+  opportunities.forEach(
+    (row) => {
 
       const createdDate =
-        getOpportunityCreatedDate(row);
+        getOpportunityCreatedDate(
+          row
+        );
 
-      const month = getMonthLabel(createdDate);
+
+      const month =
+        getMonthLabel(
+          createdDate
+        );
+
 
       if (!monthlyMap[month]) {
+
         monthlyMap[month] = {
+
           month,
+
           opportunities: 0,
+
           value: 0,
+
         };
+
       }
 
-      monthlyMap[month].opportunities += 1;
+
+      monthlyMap[month]
+        .opportunities += 1;
+
+
       monthlyMap[month].value +=
         getOpportunityValue(row);
 
-      const outcomeLabel =
-        text(
-          getColumnValue(row, [
-            "Outcome bucket",
-            "Outcome Bucket",
-            "Outcome_Bucket",
-            "Outcome-Bucket",
-            "Outcome",
-          ])
-        ) || "Unknown";
+    }
+  );
 
-      outcomeMap[outcomeLabel] =
-        (outcomeMap[outcomeLabel] || 0) + 1;
 
-      if (age < 30) {
-        ageBuckets["<30"] += 1;
-      } else if (age < 60) {
-        ageBuckets["30–60"] += 1;
-      } else if (age <= 90) {
-        ageBuckets["60–90"] += 1;
-      } else {
-        ageBuckets[">90"] += 1;
-      }
-    });
+  /*
+   * Sort the monthly data chronologically.
+   *
+   * Unknown is always placed at the end.
+   */
 
-    const monthlyData =
-      Object.values(monthlyMap).sort(
-        (a, b) => {
-          if (a.month === "Unknown") return 1;
-          if (b.month === "Unknown") return -1;
-          return a.month.localeCompare(b.month);
+  const monthlyData =
+    Object.values(
+      monthlyMap
+    ).sort(
+      (a, b) => {
+
+        if (
+          a.month === "Unknown"
+        ) {
+          return 1;
         }
-      );
 
-    const outcomeData =
-      Object.entries(outcomeMap)
-        .map(([name, value]) => ({
+        if (
+          b.month === "Unknown"
+        ) {
+          return -1;
+        }
+
+        return a.month.localeCompare(
+          b.month
+        );
+
+      }
+    );
+
+
+  /* =======================================================
+     OUTCOME DATA
+  ======================================================= */
+
+  const outcomeMap = {};
+
+
+  opportunities.forEach(
+    (row) => {
+
+      const outcome =
+        text(
+          getColumnValue(
+            row,
+            [
+              "Outcome bucket",
+              "Outcome Bucket",
+              "Outcome_Bucket",
+              "Outcome-Bucket",
+              "Outcome",
+            ]
+          )
+        ) ||
+        "Unknown";
+
+
+      outcomeMap[outcome] =
+        (
+          outcomeMap[outcome] ||
+          0
+        ) + 1;
+
+    }
+  );
+
+
+  const outcomeData =
+    Object.entries(
+      outcomeMap
+    )
+      .map(
+        ([name, value]) => ({
           name,
           value,
-        }))
-        .sort((a, b) => b.value - a.value);
+        })
+      )
+      .sort(
+        (a, b) =>
+          b.value - a.value
+      );
 
-    const ageData =
-      Object.entries(ageBuckets).map(
+
+  /* =======================================================
+     AGE DATA
+  ======================================================= */
+
+  const ageBuckets = {
+
+    "<30": 0,
+
+    "30–60": 0,
+
+    "60–90": 0,
+
+    ">90": 0,
+
+  };
+
+
+  opportunities.forEach(
+    (row) => {
+
+      const age =
+        number(
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
+        );
+
+
+      if (age < 30) {
+
+        ageBuckets["<30"]++;
+
+      } else if (age < 60) {
+
+        ageBuckets["30–60"]++;
+
+      } else if (age <= 90) {
+
+        ageBuckets["60–90"]++;
+
+      } else {
+
+        ageBuckets[">90"]++;
+
+      }
+
+    }
+  );
+
+
+  const ageData =
+    Object.entries(
+      ageBuckets
+    )
+      .map(
         ([name, value]) => ({
           name,
           value,
         })
       );
 
-    return {
-      pipelineValue,
-      won,
-      active,
-      agingRisk,
-      monthlyData,
-      outcomeData,
-      ageData,
-    };
-  }, [opportunities, agingCritical]);
-
-  const {
-    pipelineValue,
-    won,
-    active,
-    agingRisk,
-    monthlyData,
-    outcomeData,
-    ageData,
-  } = derived;
 
   /* =======================================================
      EMPTY STATE
