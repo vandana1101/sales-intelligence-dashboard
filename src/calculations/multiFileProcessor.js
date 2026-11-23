@@ -10,6 +10,70 @@ import {
 
 
 /*
+ * Get a column value using a few common
+ * header variations.
+ *
+ * This helps keep CSV and Excel files
+ * compatible when their headers differ
+ * slightly in capitalization/spacing.
+ */
+function getColumnValue(row, possibleNames) {
+
+  if (!row) {
+    return null;
+  }
+
+  const normalizedKeys =
+    Object.keys(row).reduce(
+      (map, key) => {
+
+        const normalized =
+          String(key)
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ");
+
+        map[normalized] = key;
+
+        return map;
+
+      },
+      {}
+    );
+
+
+  for (const name of possibleNames) {
+
+    const normalizedName =
+      String(name)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+
+    const actualKey =
+      normalizedKeys[normalizedName];
+
+
+    if (
+      actualKey !== undefined &&
+      row[actualKey] !== null &&
+      row[actualKey] !== undefined
+    ) {
+
+      return row[actualKey];
+
+    }
+
+  }
+
+
+  return null;
+
+}
+
+
+/*
  * Get the reference/snapshot date for a workbook.
  *
  * We use the latest Updated Time available.
@@ -22,24 +86,42 @@ function getWorkbookSnapshotDate(
 
   const allDates = [];
 
+
   // Opportunity dates
   if (classifiedWorkbook.opportunities) {
 
     classifiedWorkbook.opportunities.rows
       .forEach((row) => {
 
-        if (row["Updated Time"]) {
-          allDates.push(
-            row["Updated Time"]
+        const updatedTime =
+          getColumnValue(
+            row,
+            [
+              "Updated Time",
+              "UpdatedTime",
+              "Updated Date",
+            ]
           );
+
+
+        const createdDate =
+          getColumnValue(
+            row,
+            [
+              "Opportunity Created Date",
+              "Opportunity Created",
+              "Created Date",
+            ]
+          );
+
+
+        if (updatedTime) {
+          allDates.push(updatedTime);
         }
 
-        if (
-          row["Opportunity Created Date"]
-        ) {
-          allDates.push(
-            row["Opportunity Created Date"]
-          );
+
+        if (createdDate) {
+          allDates.push(createdDate);
         }
 
       });
@@ -145,6 +227,10 @@ function addSnapshotMetadata(
 
 /*
  * Merge rows from multiple uploaded files.
+ *
+ * CSV and Excel files are already normalized
+ * by workbookReader.js, so this function does
+ * not need separate CSV logic.
  */
 export function buildMultiFileDataset(
   classifiedWorkbooks
@@ -157,11 +243,16 @@ export function buildMultiFileDataset(
   const fileSummaries = [];
 
 
-  classifiedWorkbooks.forEach(
+  (classifiedWorkbooks || []).forEach(
     (workbook) => {
 
+      if (!workbook) {
+        return;
+      }
+
+
       const fileName =
-        workbook.fileName;
+        workbook.fileName || "Unknown file";
 
 
       const snapshotDate =
@@ -301,28 +392,43 @@ export function getCurrentOpportunities(
     new Map();
 
 
-  opportunities.forEach(
+  (opportunities || []).forEach(
     (row) => {
 
       const id =
-        row["Opportunity ID"];
+        getColumnValue(
+          row,
+          [
+            "Opportunity ID",
+            "Opportunity Id",
+            "OpportunityID",
+          ]
+        );
 
 
-      if (!id) {
+      if (
+        id === null ||
+        id === undefined ||
+        String(id).trim() === ""
+      ) {
         return;
       }
 
 
+      const opportunityId =
+        String(id).trim();
+
+
       const existing =
         latestById.get(
-          String(id)
+          opportunityId
         );
 
 
       if (!existing) {
 
         latestById.set(
-          String(id),
+          opportunityId,
           row
         );
 
@@ -343,6 +449,10 @@ export function getCurrentOpportunities(
         );
 
 
+      /*
+       * If the current record has a newer
+       * snapshot date, replace the old one.
+       */
       if (
         currentDate &&
         existingDate &&
@@ -350,7 +460,27 @@ export function getCurrentOpportunities(
       ) {
 
         latestById.set(
-          String(id),
+          opportunityId,
+          row
+        );
+
+        return;
+
+      }
+
+
+      /*
+       * If the existing record has no valid
+       * snapshot date but the new record does,
+       * prefer the new record.
+       */
+      if (
+        currentDate &&
+        !existingDate
+      ) {
+
+        latestById.set(
+          opportunityId,
           row
         );
 

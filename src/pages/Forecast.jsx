@@ -36,6 +36,43 @@ import SectionHeader from "../components/dashboard/SectionHeader";
    HELPERS
 ========================================================= */
 
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
+function getColumnValue(row, possibleNames = []) {
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+
+  const normalizedMap = new Map(
+    Object.entries(row).map(
+      ([key, value]) => [
+        normalizeHeader(key),
+        value,
+      ]
+    )
+  );
+
+  for (const name of possibleNames) {
+    const normalizedName =
+      normalizeHeader(name);
+
+    if (normalizedMap.has(normalizedName)) {
+      return normalizedMap.get(normalizedName);
+    }
+  }
+
+  return "";
+}
+
+
 function cleanText(value) {
 
   if (
@@ -599,7 +636,10 @@ function isNumericColumn(
       (row) => {
 
         const value =
-          row?.[column];
+          getColumnValue(
+            row,
+            [column]
+          );
 
 
         if (
@@ -654,7 +694,10 @@ function isDateColumn(
       (row) => {
 
         const value =
-          row?.[column];
+          getColumnValue(
+            row,
+            [column]
+          );
 
 
         if (
@@ -1238,9 +1281,10 @@ function Forecast({
 
             const value =
               toNumber(
-                row?.[
-                  metric
-                ]
+                getColumnValue(
+                  row,
+                  [metric]
+                )
               );
 
 

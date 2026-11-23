@@ -7,22 +7,106 @@ import {
 } from "./dateUtils";
 
 
+/* =========================================================
+   HEADER HELPERS
+========================================================= */
+
 /*
- * Finds the effective snapshot date of the dataset.
- *
- * We use the latest Updated Time rather than
- * today's date so historical Excel files remain
- * reproducible.
+ * Normalize column names so Excel and CSV files with
+ * slightly different spacing/capitalization can still be
+ * processed consistently.
  */
-export function getReferenceDate(rows) {
-  const updatedDates = rows.map(
-    (row) => row["Updated Time"]
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
+/*
+ * Get a value from a row using multiple possible
+ * versions of the same column name.
+ */
+function getColumnValue(
+  row,
+  possibleNames
+) {
+  if (!row) {
+    return null;
+  }
+
+  const keys = Object.keys(row);
+
+  const normalizedKeys = keys.reduce(
+    (map, key) => {
+      map[normalizeHeader(key)] = key;
+      return map;
+    },
+    {}
   );
 
-  const opportunityDates = rows.map(
-    (row) =>
-      row["Opportunity Created Date"]
-  );
+  for (const name of possibleNames) {
+    const actualKey =
+      normalizedKeys[
+        normalizeHeader(name)
+      ];
+
+    if (
+      actualKey !== undefined
+    ) {
+      return row[actualKey];
+    }
+  }
+
+  return null;
+}
+
+
+/* =========================================================
+   REFERENCE DATE
+========================================================= */
+
+/*
+ * Finds the effective snapshot/reference date
+ * of the dataset.
+ *
+ * We use the latest Updated Time rather than
+ * today's date so historical Excel/CSV files
+ * remain reproducible.
+ */
+export function getReferenceDate(
+  rows
+) {
+  const updatedDates =
+    rows
+      .map((row) =>
+        getColumnValue(
+          row,
+          [
+            "Updated Time",
+            "UpdatedTime",
+            "Updated Date",
+          ]
+        )
+      )
+      .filter(Boolean);
+
+  const opportunityDates =
+    rows
+      .map((row) =>
+        getColumnValue(
+          row,
+          [
+            "Opportunity Created Date",
+            "Opportunity Created",
+            "Created Date",
+          ]
+        )
+      )
+      .filter(Boolean);
 
   return (
     maxDate(updatedDates) ||
@@ -31,6 +115,10 @@ export function getReferenceDate(rows) {
   );
 }
 
+
+/* =========================================================
+   AGE
+========================================================= */
 
 /*
  * Calculate the Age of an opportunity.
@@ -41,10 +129,20 @@ export function calculateAge(
 ) {
   const created =
     parseDate(
-      row["Opportunity Created Date"]
+      getColumnValue(
+        row,
+        [
+          "Opportunity Created Date",
+          "Opportunity Created",
+          "Created Date",
+        ]
+      )
     );
 
-  if (!created || !referenceDate) {
+  if (
+    !created ||
+    !referenceDate
+  ) {
     return null;
   }
 
@@ -61,6 +159,10 @@ export function calculateAge(
 }
 
 
+/* =========================================================
+   OPPORTUNITY ENRICHMENT
+========================================================= */
+
 /*
  * Recreates the calculated Opportunity columns
  * from the original Excel workbook.
@@ -72,6 +174,113 @@ export function enrichOpportunity(
   const enriched = {
     ...row,
   };
+
+
+  // ------------------------------------------
+  // ORIGINAL COLUMN VALUES
+  // ------------------------------------------
+
+  const createdDate =
+    getColumnValue(
+      row,
+      [
+        "Opportunity Created Date",
+        "Opportunity Created",
+        "Created Date",
+      ]
+    );
+
+  const rfqReceivedDate =
+    getColumnValue(
+      row,
+      [
+        "RFQ Received date",
+        "RFQ Received Date",
+        "RFQ Received",
+      ]
+    );
+
+  const solutionRequestDate =
+    getColumnValue(
+      row,
+      [
+        "Solution request raised date",
+        "Solution Request Raised Date",
+        "Solution Request Date",
+      ]
+    );
+
+  const solutionReceivedDate =
+    getColumnValue(
+      row,
+      [
+        "Solution received date",
+        "Solution Received Date",
+        "Solution Received",
+      ]
+    );
+
+  const bfApprovalDate =
+    getColumnValue(
+      row,
+      [
+        "BF team approved date",
+        "BF Team Approved Date",
+        "BF Approval Date",
+      ]
+    );
+
+  const rfqTargetDate =
+    getColumnValue(
+      row,
+      [
+        "RFQ Submission target date",
+        "RFQ Submission Target Date",
+        "RFQ Target Date",
+      ]
+    );
+
+  const proposalSubmittedDate =
+    getColumnValue(
+      row,
+      [
+        "Proposal submitted date",
+        "Proposal Submitted Date",
+        "Proposal Date",
+      ]
+    );
+
+  const dateWon =
+    getColumnValue(
+      row,
+      [
+        "Date won",
+        "Date Won",
+        "Won Date",
+      ]
+    );
+
+
+  // ------------------------------------------
+  // PARSED CREATED DATE
+  // ------------------------------------------
+  /*
+   * IMPORTANT:
+   *
+   * Excel can provide date values in a form that
+   * dateUtils can work with directly, while CSV
+   * normalization produces strings such as:
+   *
+   * 2022-03-23
+   * 2022-03-23 00:00:00
+   *
+   * Explicitly parse the Created Date once and use
+   * the parsed Date object for all date-based
+   * Opportunity grouping.
+   */
+  const parsedCreatedDate =
+    parseDate(createdDate);
+
 
   // ------------------------------------------
   // AGE
@@ -98,6 +307,7 @@ export function enrichOpportunity(
 
   // ------------------------------------------
   // CREATED → RFQ RECEIVED
+  //
   // Excel:
   // =IF(OR(G2="",AT2=""),"",AT2-G2)
   // ------------------------------------------
@@ -106,13 +316,14 @@ export function enrichOpportunity(
     "Days: Created to RFQ Received (G&AT)"
   ] =
     daysBetween(
-      row["Opportunity Created Date"],
-      row["RFQ Received date"]
+      createdDate,
+      rfqReceivedDate
     );
 
 
   // ------------------------------------------
   // SOLUTION REQUEST → SOLUTION RECEIVED
+  //
   // Excel:
   // =IF(OR(AY2="",AW2=""),"",AY2-AW2)
   // ------------------------------------------
@@ -121,13 +332,14 @@ export function enrichOpportunity(
     "Days: Solution Request to Solution Received (AY&AW)"
   ] =
     daysBetween(
-      row["Solution request raised date"],
-      row["Solution received date"]
+      solutionRequestDate,
+      solutionReceivedDate
     );
 
 
   // ------------------------------------------
   // SOLUTION RECEIVED → BF APPROVAL
+  //
   // Excel:
   // =IF(OR(BA2="",AY2=""),"",BA2-AY2)
   // ------------------------------------------
@@ -136,13 +348,14 @@ export function enrichOpportunity(
     "Days: solution Received to BF Approval (BA&AY)"
   ] =
     daysBetween(
-      row["Solution received date"],
-      row["BF team approved date"]
+      solutionReceivedDate,
+      bfApprovalDate
     );
 
 
   // ------------------------------------------
   // PROPOSAL SUBMISSION → RFQ TARGET
+  //
   // Excel:
   // =IF(OR(BB2="",AU2=""),"",BB2-AU2)
   // ------------------------------------------
@@ -151,13 +364,14 @@ export function enrichOpportunity(
     "Days: Proposal Submission to RFQ Submission target date (BB&AU)"
   ] =
     daysBetween(
-      row["RFQ Submission target date"],
-      row["Proposal submitted date"]
+      rfqTargetDate,
+      proposalSubmittedDate
     );
 
 
   // ------------------------------------------
   // PROPOSAL SUBMISSION → WON
+  //
   // Excel:
   // =IF(OR(BG2="",BB2=""),"",BG2-BB2)
   // ------------------------------------------
@@ -166,8 +380,8 @@ export function enrichOpportunity(
     "Days: Proposal Submission to Date Won (BB&BG)"
   ] =
     daysBetween(
-      row["Proposal submitted date"],
-      row["Date won"]
+      proposalSubmittedDate,
+      dateWon
     );
 
 
@@ -178,9 +392,11 @@ export function enrichOpportunity(
   enriched[
     "Opportunity Week (G)"
   ] =
-    formatOpportunityWeek(
-      row["Opportunity Created Date"]
-    );
+    parsedCreatedDate
+      ? formatOpportunityWeek(
+          parsedCreatedDate
+        )
+      : null;
 
 
   // ------------------------------------------
@@ -190,9 +406,11 @@ export function enrichOpportunity(
   enriched[
     "Opportunity Month (G)"
   ] =
-    formatMonth(
-      row["Opportunity Created Date"]
-    );
+    parsedCreatedDate
+      ? formatMonth(
+          parsedCreatedDate
+        )
+      : null;
 
 
   // ------------------------------------------
@@ -200,26 +418,28 @@ export function enrichOpportunity(
   //
   // Excel:
   // =IF(OR(AU2="",BB2=""),0,AU2-BB2)
+  //
+  // Target Date - Proposal Submitted Date
   // ------------------------------------------
 
   const targetDate =
     parseDate(
-      row["RFQ Submission target date"]
+      rfqTargetDate
     );
 
   const proposalDate =
     parseDate(
-      row["Proposal submitted date"]
+      proposalSubmittedDate
     );
 
-  if (!targetDate || !proposalDate) {
-
+  if (
+    !targetDate ||
+    !proposalDate
+  ) {
     enriched[
       "Delay in Proposal Submission Date (AU&BB)"
     ] = 0;
-
   } else {
-
     enriched[
       "Delay in Proposal Submission Date (AU&BB)"
     ] =
@@ -227,14 +447,12 @@ export function enrichOpportunity(
         proposalDate,
         targetDate
       );
-
   }
 
 
   // ------------------------------------------
   // OUTCOME BUCKET
   //
-  // Excel:
   // Won / Onboarded / 1St Invoice / Agreement
   // → Won
   //
@@ -247,7 +465,14 @@ export function enrichOpportunity(
 
   const stage =
     String(
-      row["Opportunity Stage"] || ""
+      getColumnValue(
+        row,
+        [
+          "Opportunity Stage",
+          "Opportunity stage",
+          "Stage",
+        ]
+      ) || ""
     ).trim();
 
   if (
@@ -258,25 +483,21 @@ export function enrichOpportunity(
       "Agreement",
     ].includes(stage)
   ) {
-
     enriched["Outcome bucket"] =
       "Won";
-
-  } else if (stage === "Lost") {
-
+  } else if (
+    stage === "Lost"
+  ) {
     enriched["Outcome bucket"] =
       "Lost";
-
-  } else if (stage === "Hold") {
-
+  } else if (
+    stage === "Hold"
+  ) {
     enriched["Outcome bucket"] =
       "Hold";
-
   } else {
-
     enriched["Outcome bucket"] =
       "Active/In Pipeline";
-
   }
 
 
@@ -284,13 +505,21 @@ export function enrichOpportunity(
 }
 
 
+/* =========================================================
+   PROCESS OPPORTUNITIES
+========================================================= */
+
 /*
  * Process the entire Opportunity dataset.
  */
 export function processOpportunities(
   rows
 ) {
-  if (!rows || rows.length === 0) {
+  if (
+    !rows ||
+    !Array.isArray(rows) ||
+    rows.length === 0
+  ) {
     return {
       rows: [],
       referenceDate: null,
@@ -298,7 +527,9 @@ export function processOpportunities(
   }
 
   const referenceDate =
-    getReferenceDate(rows);
+    getReferenceDate(
+      rows
+    );
 
   const processedRows =
     rows.map((row) =>

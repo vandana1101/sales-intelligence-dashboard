@@ -7,6 +7,7 @@ import Sidebar from "./components/dashboard/Sidebar";
 
 import Overview from "./pages/Overview";
 import Opportunities from "./pages/Opportunities";
+import WonAnalysis from "./pages/WonAnalysis";
 import Leads from "./pages/Leads";
 import Activities from "./pages/Activities";
 import Insights from "./pages/Insights";
@@ -294,6 +295,9 @@ function App() {
     Opportunities:
       "opportunities",
 
+    "Won Analysis":
+      "won-analysis",
+
     Leads:
       "leads",
 
@@ -342,7 +346,7 @@ function App() {
     ) {
 
       alert(
-        "Please upload at least one Excel file."
+        "Please upload at least one file."
       );
 
       return;
@@ -367,50 +371,77 @@ function App() {
         );
 
 
-        const workbook =
-          await readWorkbook(
-            file
+        /*
+         * readWorkbook supports:
+         * - .xlsx
+         * - .xls
+         * - .csv
+         *
+         * CSV files are normalized into
+         * the same workbook structure as
+         * Excel files.
+         */
+
+        try {
+
+          const workbook =
+            await readWorkbook(
+              file
+            );
+
+
+          console.log(
+            "Sheets found:",
+            workbook.sheetNames
           );
 
 
-        console.log(
-          "Sheets found:",
-          workbook.sheetNames
-        );
+          const classified =
+            classifySheets(
+              workbook.sheets
+            );
 
 
-        const classified =
-          classifySheets(
-            workbook.sheets
-          );
-
-
-        console.log(
-          "Classification:",
-          classified
-        );
-
-
-        const processed =
-          processWorkbook(
+          console.log(
+            "Classification:",
             classified
           );
 
 
-        console.log(
-          "Processed workbook:",
-          processed
-        );
+          const processed =
+            processWorkbook(
+              classified
+            );
 
 
-        processedFiles.push({
+          console.log(
+            "Processed file:",
+            processed
+          );
 
-          fileName:
-            file.name,
 
-          ...processed,
+          processedFiles.push({
 
-        });
+            fileName:
+              file.name,
+
+            fileType:
+              workbook.fileType,
+
+            ...processed,
+
+          });
+
+        } catch (fileError) {
+
+          throw new Error(
+            `${file.name}: ${
+              fileError?.message ||
+              "Could not process this file."
+            }`
+          );
+
+        }
 
       }
 
@@ -433,6 +464,12 @@ function App() {
 
           files:
             processedFiles,
+
+          fileTypes:
+            processedFiles.map(
+              (file) =>
+                file.fileType
+            ),
 
           opportunities:
             processedFiles.flatMap(
@@ -480,12 +517,14 @@ function App() {
     } catch (error) {
 
       console.error(
+        "Dashboard build error:",
         error
       );
 
 
       alert(
-        "Something went wrong while reading the Excel file."
+        error?.message ||
+        "Something went wrong while reading the uploaded file."
       );
 
 
@@ -532,6 +571,18 @@ function App() {
         return (
 
           <Opportunities
+            data={data}
+            settings={settings}
+          />
+
+        );
+
+
+      case "won-analysis":
+
+        return (
+
+          <WonAnalysis
             data={data}
             settings={settings}
           />
@@ -735,7 +786,7 @@ function App() {
                 "
               >
 
-                Detecting sheets and
+                Detecting files and
                 preparing your dashboard
 
               </p>

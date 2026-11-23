@@ -81,18 +81,30 @@ function number(value) {
 */
 
 function getField(row, possibleNames) {
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+
+  const normalizeHeader = (value) =>
+    String(value ?? "")
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ");
+
+  const normalizedMap = new Map(
+    Object.entries(row).map(([key, value]) => [
+      normalizeHeader(key),
+      value,
+    ])
+  );
 
   for (const name of possibleNames) {
+    const normalizedName = normalizeHeader(name);
 
-    if (
-      row &&
-      Object.prototype.hasOwnProperty.call(
-        row,
-        name
-      )
-    ) {
-
-      const value = row[name];
+    if (normalizedMap.has(normalizedName)) {
+      const value = normalizedMap.get(normalizedName);
 
       if (
         value !== null &&
@@ -101,9 +113,7 @@ function getField(row, possibleNames) {
       ) {
         return value;
       }
-
     }
-
   }
 
   return "";
@@ -1143,7 +1153,7 @@ function Leads({
 
           <p className="text-sm text-slate-400 mt-2">
 
-            Upload a workbook containing a Leads Data sheet.
+            Upload an Excel or CSV file containing Leads Data.
 
           </p>
 

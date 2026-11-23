@@ -70,58 +70,376 @@ function number(value) {
 
 
 /* =========================================================
+   HEADER NORMALIZATION
+========================================================= */
+
+function normalizeHeader(value) {
+  return String(value ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+
+/* =========================================================
+   FLEXIBLE COLUMN LOOKUP
+========================================================= */
+
+function getColumnValue(
+  row,
+  possibleNames
+) {
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
+
+  const entries = Object.entries(row);
+
+  const targetNames =
+    possibleNames.map(
+      normalizeHeader
+    );
+
+  const match =
+    entries.find(
+      ([key]) =>
+        targetNames.includes(
+          normalizeHeader(key)
+        )
+    );
+
+  return match
+    ? match[1]
+    : undefined;
+}
+
+
+/* =========================================================
+   OPPORTUNITY VALUE
+========================================================= */
+
+function getOpportunityValue(row) {
+
+  /*
+   * Preferred:
+   * Value of Contract Per Annum INR
+   */
+
+  const annual =
+    number(
+      getColumnValue(
+        row,
+        [
+          "Value of Contract Per Annum INR",
+          "Value of Contract Per Annum",
+          "Annual Contract Value",
+        ]
+      )
+    );
+
+
+  if (annual > 0) {
+    return annual;
+  }
+
+
+  /*
+   * Fallback:
+   * Revenue potential per month × 12
+   */
+
+  const monthly =
+    number(
+      getColumnValue(
+        row,
+        [
+          "Revenue potential per month (in INR)",
+          "Revenue Potential Per Month (in INR)",
+          "Revenue Potential Per Month",
+          "Monthly Revenue Potential",
+        ]
+      )
+    );
+
+
+  return monthly * 12;
+
+}
+
+
+/* =========================================================
    SETTINGS-AWARE DISPLAY HELPERS
 ========================================================= */
 
-function getCurrencySymbol(currency = "INR") {
+function getCurrencySymbol(
+  currency = "INR"
+) {
+
   const symbols = {
     INR: "₹",
     USD: "$",
     EUR: "€",
   };
 
-  return symbols[currency] || currency;
+  return (
+    symbols[currency] ||
+    currency
+  );
+
 }
 
 
-function formatValue(value, settings = {}) {
-  const currency = settings?.currency || "INR";
-  const display = settings?.valueDisplay || "Crores";
-  const symbol = getCurrencySymbol(currency);
-  const amount = number(value);
+function formatValue(
+  value,
+  settings = {}
+) {
+
+  const currency =
+    settings?.currency ||
+    "INR";
+
+  const display =
+    settings?.valueDisplay ||
+    "Crores";
+
+  const symbol =
+    getCurrencySymbol(currency);
+
+  const amount =
+    number(value);
+
 
   if (display === "Raw") {
-    return `${symbol}${amount.toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`;
+
+    return `${symbol}${amount.toLocaleString(
+      "en-IN",
+      {
+        maximumFractionDigits: 0,
+      }
+    )}`;
+
   }
+
 
   if (display === "Lakhs") {
-    return `${symbol}${(amount / 100000).toFixed(2)} L`;
+
+    return `${symbol}${(
+      amount / 100000
+    ).toFixed(2)} L`;
+
   }
 
-  return `${symbol}${(amount / 10000000).toFixed(2)} Cr`;
+
+  return `${symbol}${(
+    amount / 10000000
+  ).toFixed(2)} Cr`;
+
 }
 
 
-function getValueAxisFormatter(settings = {}) {
-  const currency = settings?.currency || "INR";
-  const display = settings?.valueDisplay || "Crores";
-  const symbol = getCurrencySymbol(currency);
+function getValueAxisFormatter(
+  settings = {}
+) {
+
+  const currency =
+    settings?.currency ||
+    "INR";
+
+  const display =
+    settings?.valueDisplay ||
+    "Crores";
+
+  const symbol =
+    getCurrencySymbol(currency);
+
 
   return (value) => {
-    const amount = number(value);
+
+    const amount =
+      number(value);
+
 
     if (display === "Raw") {
-      return `${symbol}${(amount / 1000000).toFixed(1)}M`;
+
+      return `${symbol}${(
+        amount / 1000000
+      ).toFixed(1)}M`;
+
     }
+
 
     if (display === "Lakhs") {
-      return `${symbol}${(amount / 100000).toFixed(1)}L`;
+
+      return `${symbol}${(
+        amount / 100000
+      ).toFixed(1)}L`;
+
     }
 
-    return `${symbol}${(amount / 10000000).toFixed(1)}Cr`;
+
+    return `${symbol}${(
+      amount / 10000000
+    ).toFixed(1)}Cr`;
+
   };
+
+}
+
+
+/* =========================================================
+   MONTH HELPERS
+========================================================= */
+
+/*
+ * Get the actual Opportunity Created Date.
+ *
+ * IMPORTANT:
+ * We intentionally do NOT use Opportunity Month (G)
+ * for monthly aggregation.
+ *
+ * The source date is the authoritative field.
+ */
+
+function getOpportunityCreatedDate(row) {
+  return getColumnValue(
+    row,
+    [
+      "Opportunity Created Date",
+      "Opportunity Created",
+      "Created Date",
+      "CreatedDate",
+    ]
+  );
+}
+
+
+/*
+ * Convert a date value into:
+ *
+ * YYYY-MM
+ *
+ * Examples:
+ * 15/02/2023 -> 2023-02
+ * 15-02-2023 -> 2023-02
+ * 2023-02-15 -> 2023-02
+ */
+
+function getMonthLabel(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "Unknown";
+  }
+
+  const raw =
+    String(value).trim();
+
+
+  if (!raw) {
+    return "Unknown";
+  }
+
+
+  /*
+   * Already-normalized date:
+   *
+   * 2023-02-15
+   * 2023-02-15 10:30:00
+   */
+
+  const normalizedMatch =
+    raw.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})/
+    );
+
+
+  if (normalizedMatch) {
+
+    const year =
+      Number(normalizedMatch[1]);
+
+    const month =
+      Number(normalizedMatch[2]);
+
+
+    if (
+      Number.isFinite(year) &&
+      month >= 1 &&
+      month <= 12
+    ) {
+
+      return `${year}-${String(
+        month
+      ).padStart(2, "0")}`;
+
+    }
+
+  }
+
+
+  /*
+   * DD/MM/YYYY
+   * DD-MM-YYYY
+   */
+
+  const dmyMatch =
+    raw.match(
+      /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/
+    );
+
+
+  if (dmyMatch) {
+
+    const month =
+      Number(dmyMatch[2]);
+
+    const year =
+      Number(dmyMatch[3]);
+
+
+    if (
+      month >= 1 &&
+      month <= 12 &&
+      Number.isFinite(year)
+    ) {
+
+      return `${year}-${String(
+        month
+      ).padStart(2, "0")}`;
+
+    }
+
+  }
+
+
+  /*
+   * Final fallback for values that JavaScript
+   * can parse as a valid date.
+   */
+
+  const parsed =
+    new Date(raw);
+
+
+  if (
+    !Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+
+    return `${parsed.getFullYear()}-${String(
+      parsed.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+  }
+
+
+  return "Unknown";
 }
 
 
@@ -135,13 +453,11 @@ function Overview({
 }) {
 
   /*
-   * IMPORTANT:
-   *
    * Opportunities.jsx uses currentOpportunities.
-   * We use the exact same source here.
    *
-   * The fallbacks make the page more tolerant if the
-   * processor exposes the dataset under another name.
+   * Keep the same source here so Overview reflects the
+   * same processed dataset regardless of whether the
+   * original source was XLSX, XLS or CSV.
    */
 
   const opportunities =
@@ -182,10 +498,18 @@ function Overview({
 
         const outcome =
           text(
-            row[
-              "Outcome bucket"
-            ]
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
           ).toLowerCase();
+
 
         return (
           outcome.includes("won") &&
@@ -202,10 +526,18 @@ function Overview({
 
         const outcome =
           text(
-            row[
-              "Outcome bucket"
-            ]
+            getColumnValue(
+              row,
+              [
+                "Outcome bucket",
+                "Outcome Bucket",
+                "Outcome_Bucket",
+                "Outcome-Bucket",
+                "Outcome",
+              ]
+            )
           ).toLowerCase();
+
 
         return outcome.includes(
           "active"
@@ -216,19 +548,38 @@ function Overview({
 
 
   const agingCritical =
-    Number(settings?.opportunityRisk?.ageCritical) || 90;
+    Number(
+      settings?.opportunityRisk?.ageCritical
+    ) || 90;
+
 
   const agingRisk =
     opportunities.filter(
       (row) =>
         number(
-          row["Age"]
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
         ) > agingCritical
     ).length;
 
 
   /* =======================================================
      MONTHLY PIPELINE DATA
+
+     IMPORTANT:
+     Always derive the month from Opportunity Created Date.
+
+     Do NOT rely on Opportunity Month (G), because that is
+     a calculated/derived field and may contain incorrect
+     month assignments.
+
+     This ensures the monthly count is based on the actual
+     source opportunity creation date.
   ======================================================= */
 
   const monthlyMap = {};
@@ -237,16 +588,16 @@ function Overview({
   opportunities.forEach(
     (row) => {
 
+      const createdDate =
+        getOpportunityCreatedDate(
+          row
+        );
+
+
       const month =
-        text(
-          row[
-            "Opportunity Month (G)"
-          ]
-        ) ||
-        text(
-          row["Opportunity Month"]
-        ) ||
-        "Unknown";
+        getMonthLabel(
+          createdDate
+        );
 
 
       if (!monthlyMap[month]) {
@@ -275,9 +626,35 @@ function Overview({
   );
 
 
+  /*
+   * Sort the monthly data chronologically.
+   *
+   * Unknown is always placed at the end.
+   */
+
   const monthlyData =
     Object.values(
       monthlyMap
+    ).sort(
+      (a, b) => {
+
+        if (
+          a.month === "Unknown"
+        ) {
+          return 1;
+        }
+
+        if (
+          b.month === "Unknown"
+        ) {
+          return -1;
+        }
+
+        return a.month.localeCompare(
+          b.month
+        );
+
+      }
     );
 
 
@@ -293,9 +670,16 @@ function Overview({
 
       const outcome =
         text(
-          row[
-            "Outcome bucket"
-          ]
+          getColumnValue(
+            row,
+            [
+              "Outcome bucket",
+              "Outcome Bucket",
+              "Outcome_Bucket",
+              "Outcome-Bucket",
+              "Outcome",
+            ]
+          )
         ) ||
         "Unknown";
 
@@ -348,7 +732,13 @@ function Overview({
 
       const age =
         number(
-          row["Age"]
+          getColumnValue(
+            row,
+            [
+              "Age",
+              "Opportunity Age",
+            ]
+          )
         );
 
 
@@ -608,21 +998,20 @@ function Overview({
                     fontSize: 11,
                     fill: "#94a3b8",
                   }}
-                  tickFormatter={(value) =>
-                    `${(
-                      value /
-                      10000000
-                    ).toFixed(1)}Cr`
+                  tickFormatter={
+                    getValueAxisFormatter(
+                      settings
+                    )
                   }
                 />
 
 
                 <Tooltip
                   formatter={(value) =>
-                    `₹${(
-                      Number(value) /
-                      10000000
-                    ).toFixed(2)} Cr`
+                    formatValue(
+                      value,
+                      settings
+                    )
                   }
                 />
 
@@ -630,7 +1019,7 @@ function Overview({
                 <Area
                   type="monotone"
                   dataKey="value"
-                  name="Pipeline Value"
+                  name="Value"
                   stroke="#6366f1"
                   strokeWidth={3}
                   fill="url(#overviewPipelineGradient)"
@@ -895,6 +1284,7 @@ function Overview({
         </p>
 
       </div>
+
 
     </div>
 
