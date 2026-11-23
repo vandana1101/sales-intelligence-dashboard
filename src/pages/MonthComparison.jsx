@@ -32,6 +32,7 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import { getOpportunityValue } from "../calculations/valueUtils";
 
 
 /* =========================================================
@@ -48,32 +49,6 @@ function text(value) {
   }
 
   return String(value).trim();
-
-}
-
-
-function number(value) {
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return 0;
-  }
-
-  const result =
-    Number(
-      String(value)
-        .replace(/,/g, "")
-        .replace(/₹/g, "")
-        .replace(/%/g, "")
-        .trim()
-    );
-
-  return Number.isFinite(result)
-    ? result
-    : 0;
 
 }
 
@@ -431,46 +406,6 @@ function getOutcome(
       ]
     )
   ) || "Unknown";
-
-}
-
-
-function getOpportunityValue(
-  row
-) {
-
-  const annual =
-    number(
-      getField(
-        row,
-        [
-          "Value of Contract Per Annum INR",
-          "Annual Value in INR",
-          "Annual Value",
-        ]
-      )
-    );
-
-
-  if (annual) {
-    return annual;
-  }
-
-
-  const monthly =
-    number(
-      getField(
-        row,
-        [
-          "Revenue potential per month (in INR)",
-          "Revenue Potential Per Month",
-          "Monthly Revenue",
-        ]
-      )
-    );
-
-
-  return monthly * 12;
 
 }
 

@@ -26,6 +26,7 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import { getOpportunityValue } from "../calculations/valueUtils";
 
 
 /* =========================================================
@@ -65,32 +66,6 @@ function number(value) {
   return Number.isFinite(result)
     ? result
     : 0;
-}
-
-
-function getOpportunityValue(row) {
-
-  const annual =
-    number(
-      row[
-        "Value of Contract Per Annum INR"
-      ]
-    );
-
-  if (annual > 0) {
-    return annual;
-  }
-
-
-  const monthly =
-    number(
-      row[
-        "Revenue potential per month (in INR)"
-      ]
-    );
-
-  return monthly * 12;
-
 }
 
 
