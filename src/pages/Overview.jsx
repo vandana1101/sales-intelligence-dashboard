@@ -120,54 +120,6 @@ function getColumnValue(
    OPPORTUNITY VALUE
 ========================================================= */
 
-function getOpportunityValue(row) {
-
-  /*
-   * Preferred:
-   * Value of Contract Per Annum INR
-   */
-
-  const annual =
-    number(
-      getColumnValue(
-        row,
-        [
-          "Value of Contract Per Annum INR",
-          "Value of Contract Per Annum",
-          "Annual Contract Value",
-        ]
-      )
-    );
-
-
-  if (annual > 0) {
-    return annual;
-  }
-
-
-  /*
-   * Fallback:
-   * Revenue potential per month × 12
-   */
-
-  const monthly =
-    number(
-      getColumnValue(
-        row,
-        [
-          "Revenue potential per month (in INR)",
-          "Revenue Potential Per Month (in INR)",
-          "Revenue Potential Per Month",
-          "Monthly Revenue Potential",
-        ]
-      )
-    );
-
-
-  return monthly * 12;
-
-}
-
 
 /* =========================================================
    SETTINGS-AWARE DISPLAY HELPERS

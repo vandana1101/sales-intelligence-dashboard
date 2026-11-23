@@ -84,23 +84,6 @@ function number(value) {
 }
 
 
-function getOpportunityValue(row) {
-  const annual = number(column(row, "Value of Contract Per Annum INR"));
-
-  if (annual > 0) {
-    return annual;
-  }
-
-  const monthly = number(column(row, "Revenue potential per month (in INR)"));
-
-  if (monthly > 0) {
-    return monthly * 12;
-  }
-
-  return 0;
-}
-
-
 function getAge(row) {
   return number(column(row, "Age"));
 }

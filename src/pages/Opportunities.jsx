@@ -157,29 +157,6 @@ function getColumnExtremes(items, accessor) {
    OPPORTUNITY VALUE
 ========================================================= */
 
-function getOpportunityValue(row) {
-  const annual = number(
-    row["Value of Contract Per Annum INR"]
-  );
-
-  if (annual > 0) return annual;
-
-  const monthly = number(
-    row["Revenue potential per month (in INR)"]
-  );
-
-  if (monthly > 0) return monthly * 12;
-
-  const annualValueCrs = number(
-    row["Annual Value in Crs"]
-  );
-
-  if (annualValueCrs > 0) {
-    return annualValueCrs * 10000000;
-  }
-
-  return 0;
-}
 
 /* =========================================================
    AGE
