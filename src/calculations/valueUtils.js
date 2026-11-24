@@ -1,14 +1,19 @@
+
 const CRORE = 10000000;
 const LAKH = 100000;
 
 function hasValue(value) {
-  return value !== null &&
+  return (
+    value !== null &&
     value !== undefined &&
-    String(value).trim() !== "";
+    String(value).trim() !== ""
+  );
 }
 
 export function parseValue(value, defaultMultiplier = 1) {
-  if (!hasValue(value)) return 0;
+  if (!hasValue(value)) {
+    return 0;
+  }
 
   const text = String(value)
     .toLowerCase()
@@ -20,7 +25,9 @@ export function parseValue(value, defaultMultiplier = 1) {
     text.replace(/[^0-9.-]/g, "")
   );
 
-  if (!Number.isFinite(numeric)) return 0;
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
 
   if (/crore|crores|\bcr\b/.test(text)) {
     return numeric * CRORE;
@@ -33,107 +40,119 @@ export function parseValue(value, defaultMultiplier = 1) {
   return numeric * defaultMultiplier;
 }
 
-function normalizeHeader(value) {
-  return String(value ?? "")
-    .replace(/^\uFEFF/, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_\-\u2013\u2014]+/g, " ")
-    .replace(/\s+/g, " ");
-}
-
 function getFirstValue(row, names) {
-  if (!row || typeof row !== "object") return null;
-
-  const keys = Object.keys(row);
-
-  const normalized = new Map(
-    keys.map(key => [normalizeHeader(key), key])
-  );
-
   for (const name of names) {
-    const actualKey = normalized.get(
-      normalizeHeader(name)
-    );
-
-    if (
-      actualKey !== undefined &&
-      hasValue(row[actualKey])
-    ) {
-      return row[actualKey];
+    if (hasValue(row?.[name])) {
+      return row[name];
     }
   }
 
   return null;
 }
 
-/**
- * Returns opportunity value in INR.
- *
- * Priority:
- * 1. Existing Crores value.
- * 2. Annual INR value.
- * 3. Monthly revenue × 12.
- */
 export function getOpportunityValue(row) {
+  // Priority 1: Use an available value column expressed in Crores.
+  const croreColumn = Object.keys(row || {}).find((key) =>
+    /(?:value|values).*?(?:cr|crore)/i.test(key)
+  );
 
-  // FIRST PRIORITY: CRORES VALUE
-  const crores = getFirstValue(row, [
-    "Values in Cr",
-    "Values_in_Cr",
-    "ValuesInCr",
-    "Value in Cr",
-    "Value in Crs",
-    "Values in Crores",
-    "Annual Value in Cr",
-    "Annual Value in Crs",
-    "Annual Value in Crores",
-    "Contract Value in Cr",
-    "Contract Value in Crs",
-    "Contract Value in Crores",
-    "Annual Contract Value in Cr",
-    "Annual Contract Value in Crs",
-    "Annual Contract Value in Crores"
-  ]);
+  if (croreColumn && hasValue(row[croreColumn])) {
+    const parsedCrores = parseValue(
+      row[croreColumn],
+      CRORE
+    );
 
-  if (hasValue(crores)) {
-    const parsed = parseValue(crores, CRORE);
-
-    if (parsed > 0) return parsed;
+    if (parsedCrores > 0) {
+      return parsedCrores;
+    }
   }
 
-  // SECOND PRIORITY: ANNUAL INR
+  // Priority 2: Annual contract value in INR.
   const annual = getFirstValue(row, [
     "Value of Contract Per Annum INR",
     "Annual Value in INR",
-    "Annual Contract Value INR",
     "Annual Value",
     "Annual Contract Value",
     "Contract Value",
-    "Total Contract Value"
+    "Total Contract Value",
   ]);
 
   if (hasValue(annual)) {
-    const parsed = parseValue(annual);
+    const parsedAnnual = parseValue(annual);
 
-    if (parsed > 0) return parsed;
+    if (parsedAnnual > 0) {
+      return parsedAnnual;
+    }
   }
 
-  // THIRD PRIORITY: MONTHLY REVENUE × 12
+  // Priority 3: Other recognised annual Crores fields.
+  const annualCrores = getFirstValue(row, [
+    "Annual Value in Crs",
+    "Annual Value in Cr",
+    "Value in Cr",
+    "Value in Crs",
+    "Contract Value in Cr",
+    "Contract Value in Crs",
+  ]);
+
+  if (hasValue(annualCrores)) {
+    const parsedCrores = parseValue(
+      annualCrores,
+      CRORE
+    );
+
+    if (parsedCrores > 0) {
+      return parsedCrores;
+    }
+  }
+
+  // Priority 4: Annualise monthly revenue.
   const monthly = getFirstValue(row, [
     "Revenue potential per month (in INR)",
     "Revenue Potential Per Month",
     "Monthly Revenue",
-    "Monthly Contract Value"
+    "Monthly Contract Value",
   ]);
 
   if (hasValue(monthly)) {
-    const parsed = parseValue(monthly);
+    const parsedMonthly = parseValue(monthly);
 
-    if (parsed > 0) return parsed * 12;
+    if (parsedMonthly > 0) {
+      return parsedMonthly * 12;
+    }
+  }
+
+  // Fallback: Quantity × Unit Price.
+  const quantity = getFirstValue(row, [
+    "Quantity",
+    "Qty",
+    "No. of Units",
+    "Number of Units",
+    "Units",
+  ]);
+
+  const unitPrice = getFirstValue(row, [
+    "Unit Price",
+    "Price per Unit",
+    "Per Unit Price",
+    "Rate",
+    "Unit Rate",
+  ]);
+
+  if (hasValue(quantity) && hasValue(unitPrice)) {
+    return (
+      parseValue(quantity) *
+      parseValue(unitPrice)
+    );
   }
 
   return 0;
 }
 
-export { CRORE };
+/**
+ * Returns opportunity value in Crores.
+ * getOpportunityValue() returns the value in INR.
+ */
+export function getOpportunityValueCrores(row) {
+  return getOpportunityValue(row) / CRORE;
+}
