@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, IndianRupee, TrendingDown, Target, Search, X } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
+  CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, LabelList,
 } from "recharts";
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
@@ -289,22 +289,46 @@ export default function LossAnalysis({ data, settings = {} }) {
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <ChartCard title="Loss Reason Breakdown" subtitle="Lost deal count by standardized detailed reason"><div className="h-[380px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={reasonData} layout="vertical" margin={{ left: 30, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="name" width={205} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#ef4444" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
-        <ChartCard title="Value Lost by Reason" subtitle="Contribution of each reason to total lost value"><div className="h-[380px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={[...reasonData].sort((a, b) => b.valueLost - a.valueLost).slice(0, 10)}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={100} interval={0} tick={{ fontSize: 9 }} /><YAxis /><Tooltip formatter={(value) => formatCr(value)} /><Bar dataKey="valueLost" name="Value Lost (Cr)" fill="#f97316" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Loss Reason Breakdown" subtitle="Lost deal count by standardized detailed reason"><div className="h-[380px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={reasonData} layout="vertical" margin={{ left: 30, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="name" width={205} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#ef4444" radius={[0, 6, 6, 0]}>
+  <LabelList dataKey="count" position="right" style={{ fill: "#334155", fontSize: 11, fontWeight: 600 }} />
+</Bar></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Value Lost by Reason" subtitle="Contribution of each reason to total lost value"><div className="h-[380px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={[...reasonData].sort((a, b) => b.valueLost - a.valueLost).slice(0, 10)}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={100} interval={0} tick={{ fontSize: 9 }} /><YAxis /><Tooltip formatter={(value) => formatCr(value)} /><Bar dataKey="valueLost" name="Value Lost (Cr)" fill="#f97316" radius={[6, 6, 0, 0]}>
+  <LabelList dataKey="valueLost" position="top" formatter={(value) => Number(value).toFixed(2)} style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+</Bar></BarChart></ResponsiveContainer></div></ChartCard>
       </div>
 
-      <ChartCard title="Year-on-Year Loss Trend & Contribution" subtitle="Lost deals, value lost and year-over-year movement"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={yearlyData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="year" /><YAxis yAxisId="count" allowDecimals={false} /><YAxis yAxisId="value" orientation="right" /><Tooltip /><Legend /><Line yAxisId="count" type="monotone" dataKey="lostDeals" name="Lost Deals" stroke="#ef4444" strokeWidth={3} /><Line yAxisId="value" type="monotone" dataKey="valueLost" name="Value Lost (Cr)" stroke="#6366f1" strokeWidth={3} /></LineChart></ResponsiveContainer></div></ChartCard>
+      <ChartCard title="Year-on-Year Loss Trend & Contribution" subtitle="Lost deals, value lost and year-over-year movement"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={yearlyData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="year" /><YAxis yAxisId="count" allowDecimals={false} /><YAxis yAxisId="value" orientation="right" /><Tooltip /><Legend /><Line yAxisId="count" type="monotone" dataKey="lostDeals" name="Lost Deals" stroke="#ef4444" strokeWidth={3}>
+  <LabelList dataKey="lostDeals" position="top" style={{ fill: "#b91c1c", fontSize: 10, fontWeight: 600 }} />
+</Line>
+<Line yAxisId="value" type="monotone" dataKey="valueLost" name="Value Lost (Cr)" stroke="#6366f1" strokeWidth={3}>
+  <LabelList dataKey="valueLost" position="bottom" formatter={(value) => Number(value).toFixed(2)} style={{ fill: "#4338ca", fontSize: 10, fontWeight: 600 }} />
+</Line></LineChart></ResponsiveContainer></div></ChartCard>
 
-      <ChartCard title="Year-wise Trend — Top 6 Loss Reasons" subtitle="Annual count by the six most frequent loss reasons"><div className="h-[360px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={yearReasonData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="year" /><YAxis allowDecimals={false} /><Tooltip /><Legend />{[...reasonData].sort((a, b) => b.count - a.count).slice(0, 6).map((reason, index) => <Bar key={reason.name} dataKey={reason.name} stackId="reasons" fill={COLORS[index % COLORS.length]} />)}</BarChart></ResponsiveContainer></div></ChartCard>
+      <ChartCard title="Year-wise Trend — Top 6 Loss Reasons" subtitle="Annual count by the six most frequent loss reasons"><div className="h-[360px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={yearReasonData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="year" /><YAxis allowDecimals={false} /><Tooltip /><Legend />{[...reasonData].sort((a, b) => b.count - a.count).slice(0, 6).map((reason, index) => (
+  <Bar key={reason.name} dataKey={reason.name} stackId="reasons" fill={COLORS[index % COLORS.length]}>
+    <LabelList dataKey={reason.name} position="center" formatter={(value) => Number(value) > 0 ? value : ""} style={{ fill: "#ffffff", fontSize: 10, fontWeight: 700 }} />
+  </Bar>
+))}</BarChart></ResponsiveContainer></div></ChartCard>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <ChartCard title="Loss by Industry Vertical" subtitle="Count and value lost by PCS vertical"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={verticalData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={90} tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#6366f1" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
-        <ChartCard title="Loss by Region" subtitle="Lost deal count across PCS user regions"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={regionData} dataKey="count" nameKey="name" innerRadius={65} outerRadius={110} paddingAngle={3} label>{regionData.map((item, index) => <Cell key={item.name} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Loss by Industry Vertical" subtitle="Count and value lost by PCS vertical"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={verticalData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={90} tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#6366f1" radius={[5, 5, 0, 0]}>
+  <LabelList dataKey="count" position="top" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+</Bar></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Loss by Region" subtitle="Lost deal count across PCS user regions"><div className="h-[340px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={regionData} dataKey="count" nameKey="name" innerRadius={65} outerRadius={110} paddingAngle={3}
+  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+  labelLine={{ stroke: "#94a3b8" }}>{regionData.map((item, index) => <Cell key={item.name} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></ChartCard>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <ChartCard title="Loss by Deal Size Bucket" subtitle="Count and value lost by workbook deal-size bands"><div className="h-[330px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={dealSizeData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="count" name="Lost Deals" fill="#f43f5e" /><Bar dataKey="valueLost" name="Value Lost (Cr)" fill="#8b5cf6" /></BarChart></ResponsiveContainer></div></ChartCard>
-        <ChartCard title="Loss by Lead Source" subtitle="Failed opportunities by original lead source"><div className="h-[330px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={sourceData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={85} tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#0ea5e9" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Loss by Deal Size Bucket" subtitle="Count and value lost by workbook deal-size bands"><div className="h-[330px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={dealSizeData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="count" name="Lost Deals" fill="#f43f5e">
+  <LabelList dataKey="count" position="top" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+</Bar>
+<Bar dataKey="valueLost" name="Value Lost (Cr)" fill="#8b5cf6">
+  <LabelList dataKey="valueLost" position="top" formatter={(value) => Number(value).toFixed(2)} style={{ fill: "#5b21b6", fontSize: 10, fontWeight: 600 }} />
+</Bar></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Loss by Lead Source" subtitle="Failed opportunities by original lead source"><div className="h-[330px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={sourceData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" angle={-25} textAnchor="end" height={85} tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="count" name="Lost Deals" fill="#0ea5e9" radius={[5, 5, 0, 0]}>
+  <LabelList dataKey="count" position="top" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+</Bar></BarChart></ResponsiveContainer></div></ChartCard>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

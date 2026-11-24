@@ -21,6 +21,7 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
 } from "recharts";
 
 import KPI from "../components/dashboard/KPI";
@@ -975,7 +976,14 @@ function Overview({
                   stroke="#6366f1"
                   strokeWidth={3}
                   fill="url(#overviewPipelineGradient)"
-                />
+                >
+                  <LabelList
+                    dataKey="value"
+                    position="top"
+                    formatter={(value) => formatValue(value, settings)}
+                    style={{ fill: "#4338ca", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Area>
 
               </AreaChart>
 
@@ -1011,6 +1019,10 @@ function Overview({
                   outerRadius={100}
                   innerRadius={65}
                   paddingAngle={3}
+                  label={({ name, percent }) =>
+                    `${name}: ${(percent * 100).toFixed(1)}%`
+                  }
+                  labelLine={{ stroke: "#94a3b8" }}
                 >
 
                   {outcomeData.map(
@@ -1112,7 +1124,13 @@ function Overview({
                     0,
                     0,
                   ]}
-                />
+                >
+                  <LabelList
+                    dataKey="opportunities"
+                    position="top"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 
@@ -1177,7 +1195,13 @@ function Overview({
                     6,
                     0,
                   ]}
-                />
+                >
+                  <LabelList
+                    dataKey="value"
+                    position="right"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 

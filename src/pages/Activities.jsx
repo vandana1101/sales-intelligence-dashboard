@@ -27,6 +27,7 @@ import {
   Legend,
   LineChart,
   Line,
+  LabelList,
 } from "recharts";
 
 import KPI from "../components/dashboard/KPI";
@@ -1677,6 +1678,10 @@ function Activities({
                   innerRadius={62}
                   outerRadius={105}
                   paddingAngle={3}
+                  label={({ name, percent }) =>
+                    `${name}: ${(percent * 100).toFixed(1)}%`
+                  }
+                  labelLine={{ stroke: "#94a3b8" }}
                 >
 
                   {typeData.map(
@@ -1787,7 +1792,13 @@ function Activities({
                     activeDot={{
                       r: 6,
                     }}
-                  />
+                  >
+                    <LabelList
+                      dataKey="activities"
+                      position="top"
+                      style={{ fill: "#4338ca", fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
 
                 </LineChart>
 
@@ -1811,7 +1822,9 @@ function Activities({
 
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-6">
-        <ChartCard title="Mode of Meeting × Assigned To" subtitle="Activity count by meeting mode and owner"><div className="h-[360px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={modeAssignedData.slice(0, 18)} layout="vertical" margin={{ left: 24, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="assignedTo" width={120} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="count" name="Activities" fill="#6366f1" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Mode of Meeting × Assigned To" subtitle="Activity count by meeting mode and owner"><div className="h-[360px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={modeAssignedData.slice(0, 18)} layout="vertical" margin={{ left: 24, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="assignedTo" width={120} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="count" name="Activities" fill="#6366f1" radius={[0, 6, 6, 0]} >
+                  <LabelList dataKey="count" position="right" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+                </Bar></BarChart></ResponsiveContainer></div></ChartCard>
         <ChartCard title="Meeting Mode & Owner Count" subtitle="Detailed count table"><div className="max-h-[360px] overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2 text-left">Mode of Meeting</th><th className="px-3 py-2 text-left">Assigned To</th><th className="px-3 py-2 text-right">Count</th></tr></thead><tbody>{modeAssignedData.map((item, index) => <tr key={`${item.mode}-${item.assignedTo}-${index}`} className="border-t border-slate-100"><td className="px-3 py-2">{item.mode}</td><td className="px-3 py-2">{item.assignedTo}</td><td className="px-3 py-2 text-right font-semibold">{item.count}</td></tr>)}</tbody></table></div></ChartCard>
       </div>
 
@@ -1885,7 +1898,9 @@ function Activities({
                     6,
                     0,
                   ]}
-                />
+                >
+                  <LabelList dataKey="activities" position="right" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+                </Bar>
 
               </BarChart>
 
@@ -1951,7 +1966,9 @@ function Activities({
                     0,
                     0,
                   ]}
-                />
+                >
+                  <LabelList dataKey="value" position="top" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+                </Bar>
 
               </BarChart>
 
@@ -1996,6 +2013,10 @@ function Activities({
                   innerRadius={60}
                   outerRadius={105}
                   paddingAngle={3}
+                  label={({ name, percent }) =>
+                    `${name}: ${(percent * 100).toFixed(1)}%`
+                  }
+                  labelLine={{ stroke: "#94a3b8" }}
                 >
 
                   {priorityData.map(
@@ -2087,7 +2108,9 @@ function Activities({
                     0,
                     0,
                   ]}
-                />
+                >
+                  <LabelList dataKey="value" position="top" style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }} />
+                </Bar>
 
               </BarChart>
 

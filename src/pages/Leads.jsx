@@ -26,6 +26,7 @@ import {
   Legend,
   LineChart,
   Line,
+  LabelList,
 } from "recharts";
 
 import KPI from "../components/dashboard/KPI";
@@ -1547,6 +1548,10 @@ function Leads({
                   innerRadius={65}
                   outerRadius={105}
                   paddingAngle={3}
+                  label={({ name, percent }) =>
+                    `${name}: ${(percent * 100).toFixed(1)}%`
+                  }
+                  labelLine={{ stroke: "#94a3b8" }}
                 >
 
                   {statusData.map(
@@ -1656,7 +1661,13 @@ function Leads({
                     activeDot={{
                       r: 6,
                     }}
-                  />
+                  >
+                    <LabelList
+                      dataKey="leads"
+                      position="top"
+                      style={{ fill: "#4338ca", fontSize: 10, fontWeight: 600 }}
+                    />
+                  </Line>
 
                 </LineChart>
 
@@ -1747,8 +1758,13 @@ function Leads({
                     6,
                     0,
                     0,
-                  ]}
-                />
+                  ]}>
+                  <LabelList
+                    dataKey="leads"
+                    position="top"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 
@@ -1821,8 +1837,13 @@ function Leads({
                     6,
                     6,
                     0,
-                  ]}
-                />
+                  ]}>
+                  <LabelList
+                    dataKey="leads"
+                    position="right"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 
@@ -1896,8 +1917,13 @@ function Leads({
                     6,
                     0,
                     0,
-                  ]}
-                />
+                  ]}>
+                  <LabelList
+                    dataKey="leads"
+                    position="top"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 
@@ -1958,8 +1984,13 @@ function Leads({
                     6,
                     0,
                     0,
-                  ]}
-                />
+                  ]}>
+                  <LabelList
+                    dataKey="value"
+                    position="top"
+                    style={{ fill: "#334155", fontSize: 10, fontWeight: 600 }}
+                  />
+                </Bar>
 
               </BarChart>
 
