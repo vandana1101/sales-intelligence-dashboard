@@ -116,9 +116,9 @@ export function getReferenceDate(
 }
 
 
-/* =========================================================
+/* ======================================
    AGE
-========================================================= */
+====================================== */
 
 /*
  * Calculate the Age of an opportunity.
@@ -156,6 +156,47 @@ export function calculateAge(
         (1000 * 60 * 60 * 24)
     )
   );
+}
+
+
+/* =========================================================
+   OUTCOME BUCKET HELPER
+========================================================= */
+
+/*
+ * Normalize Opportunity Stage into one consistent
+ * Outcome Bucket.
+ *
+ * LOI received is treated as Won, regardless of
+ * capitalization or extra spaces in the source workbook.
+ */
+export function getOutcomeBucket(stageValue) {
+  const stage = String(stageValue ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  if (
+    [
+      "won",
+      "onboarded",
+      "1st invoice",
+      "agreement",
+      "loi received",
+    ].includes(stage)
+  ) {
+    return "Won";
+  }
+
+  if (stage === "lost") {
+    return "Lost";
+  }
+
+  if (stage === "hold") {
+    return "Hold";
+  }
+
+  return "Active/In Pipeline";
 }
 
 
@@ -264,6 +305,7 @@ export function enrichOpportunity(
   // ------------------------------------------
   // PARSED CREATED DATE
   // ------------------------------------------
+
   /*
    * IMPORTANT:
    *
@@ -453,52 +495,26 @@ export function enrichOpportunity(
   // ------------------------------------------
   // OUTCOME BUCKET
   //
-  // Won / Onboarded / 1St Invoice / Agreement
-  // → Won
+  // Won / Onboarded / 1st Invoice /
+  // Agreement / LOI received → Won
   //
   // Lost → Lost
-  //
   // Hold → Hold
-  //
   // Everything else → Active/In Pipeline
   // ------------------------------------------
 
   const stage =
-    String(
-      getColumnValue(
-        row,
-        [
-          "Opportunity Stage",
-          "Opportunity stage",
-          "Stage",
-        ]
-      ) || ""
-    ).trim();
+    getColumnValue(
+      row,
+      [
+        "Opportunity Stage",
+        "Opportunity stage",
+        "Stage",
+      ]
+    );
 
-  if (
-    [
-      "Won",
-      "Onboarded",
-      "1St Invoice",
-      "Agreement",
-    ].includes(stage)
-  ) {
-    enriched["Outcome bucket"] =
-      "Won";
-  } else if (
-    stage === "Lost"
-  ) {
-    enriched["Outcome bucket"] =
-      "Lost";
-  } else if (
-    stage === "Hold"
-  ) {
-    enriched["Outcome bucket"] =
-      "Hold";
-  } else {
-    enriched["Outcome bucket"] =
-      "Active/In Pipeline";
-  }
+  enriched["Outcome bucket"] =
+    getOutcomeBucket(stage);
 
 
   return enriched;

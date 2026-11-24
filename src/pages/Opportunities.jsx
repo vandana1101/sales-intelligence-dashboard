@@ -36,7 +36,10 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
-import { getOpportunityValue } from "../calculations/valueUtils";
+import {
+  getOpportunityValue as getOpportunityValueFromUtils,
+  parseValue,
+} from "../calculations/valueUtils";
 
 /* =========================================================
    BASIC HELPERS
@@ -155,7 +158,38 @@ function getColumnExtremes(items, accessor) {
 
 /* =========================================================
    OPPORTUNITY VALUE
+   Priority:
+   1. Use an available value already expressed in Crores.
+   2. Otherwise use annual contract value in INR.
+   3. Otherwise annualise monthly revenue (monthly × 12).
+   getOpportunityValue() returns INR; getOpportunityValueCrores()
+   returns Crores for charts and value-bucket calculations.
 ========================================================= */
+
+function getCroresValue(row) {
+  const valueColumn = Object.keys(row || {}).find((key) =>
+    /(?:value|values).*?(?:cr|crore)/i.test(key)
+  );
+
+  if (!valueColumn) return 0;
+
+  const parsed = parseValue(row[valueColumn], 10000000);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function getOpportunityValue(row) {
+  const croreValue = getCroresValue(row);
+
+  if (croreValue > 0) {
+    return croreValue;
+  }
+
+  return getOpportunityValueFromUtils(row);
+}
+
+function getOpportunityValueCrores(row) {
+  return getOpportunityValue(row) / 10000000;
+}
 
 
 /* =========================================================
