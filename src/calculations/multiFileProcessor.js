@@ -1,3 +1,4 @@
+
 import {
   processWorkbook,
 } from "./dataProcessor";
@@ -12,10 +13,6 @@ import {
 /*
  * Get a column value using a few common
  * header variations.
- *
- * This helps keep CSV and Excel files
- * compatible when their headers differ
- * slightly in capitalization/spacing.
  */
 function getColumnValue(row, possibleNames) {
 
@@ -76,22 +73,27 @@ function getColumnValue(row, possibleNames) {
 /*
  * Get the reference/snapshot date for a workbook.
  *
- * We use the latest Updated Time available.
- * If that doesn't exist, we fall back to the
- * latest Opportunity Created Date.
+ * Priority:
+ * 1. Latest Opportunity Updated Time
+ * 2. Latest Opportunity Created Date
+ * 3. Latest date from Leads or Activities
  */
-function getWorkbookSnapshotDate(
-  classifiedWorkbook
-) {
+function getWorkbookSnapshotDate(classifiedWorkbook) {
 
-  const allDates = [];
+  const updatedDates = [];
+  const createdDates = [];
+  const otherDates = [];
 
 
   // Opportunity dates
-  if (classifiedWorkbook.opportunities) {
+  if (
+    Array.isArray(
+      classifiedWorkbook.opportunities?.rows
+    )
+  ) {
 
-    classifiedWorkbook.opportunities.rows
-      .forEach((row) => {
+    classifiedWorkbook.opportunities.rows.forEach(
+      (row) => {
 
         const updatedTime =
           getColumnValue(
@@ -116,111 +118,115 @@ function getWorkbookSnapshotDate(
 
 
         if (updatedTime) {
-          allDates.push(updatedTime);
+          updatedDates.push(updatedTime);
         }
 
 
         if (createdDate) {
-          allDates.push(createdDate);
+          createdDates.push(createdDate);
         }
 
-      });
+      }
+    );
 
   }
 
 
-  // Lead dates
-  if (classifiedWorkbook.leads) {
+  if (updatedDates.length) {
+    return maxDate(updatedDates);
+  }
 
-    classifiedWorkbook.leads.rows
-      .forEach((row) => {
 
-        Object.entries(row)
-          .forEach(([key, value]) => {
+  if (createdDates.length) {
+    return maxDate(createdDates);
+  }
 
-            if (
-              /date|time|created|updated/i
-                .test(key) &&
-              value
-            ) {
 
-              allDates.push(value);
+  // Leads and Activities fallback
+  [
+    classifiedWorkbook.leads,
+    classifiedWorkbook.activities,
+  ].forEach(
+    (section) => {
+
+      if (
+        !Array.isArray(section?.rows)
+      ) {
+        return;
+      }
+
+
+      section.rows.forEach(
+        (row) => {
+
+          Object.entries(row || {}).forEach(
+            ([key, value]) => {
+
+              if (
+                /(date|time|created|updated)/i.test(key) &&
+                value
+              ) {
+
+                otherDates.push(value);
+
+              }
 
             }
+          );
 
-          });
+        }
+      );
 
-      });
-
-  }
-
-
-  // Activity dates
-  if (classifiedWorkbook.activities) {
-
-    classifiedWorkbook.activities.rows
-      .forEach((row) => {
-
-        Object.entries(row)
-          .forEach(([key, value]) => {
-
-            if (
-              /date|time|created|updated/i
-                .test(key) &&
-              value
-            ) {
-
-              allDates.push(value);
-
-            }
-
-          });
-
-      });
-
-  }
+    }
+  );
 
 
-  return maxDate(allDates);
+  return maxDate(otherDates);
 
 }
 
 
 /*
- * Add metadata to every row.
- *
- * This is extremely important for multi-month
- * analysis because we need to know which
- * uploaded file a record came from.
+ * Add source and snapshot metadata
+ * to every processed row.
  */
 function addSnapshotMetadata(
   rows,
   fileName,
   snapshotDate,
-  dataType
+  dataType,
+  snapshotOrder
 ) {
 
-  return rows.map((row) => ({
+  return rows.map(
+    (row, rowOrder) => ({
 
-    ...row,
+      ...row,
 
-    "__source_file":
-      fileName,
+      "__source_file":
+        fileName,
 
-    "__data_type":
-      dataType,
+      "__data_type":
+        dataType,
 
-    "__snapshot_date":
-      snapshotDate
-        ? snapshotDate.toISOString()
-        : null,
+      "__snapshot_date":
+        snapshotDate
+          ? snapshotDate.toISOString()
+          : null,
 
-    "__snapshot_month":
-      snapshotDate
-        ? formatMonth(snapshotDate)
-        : null,
+      "__snapshot_month":
+        snapshotDate
+          ? formatMonth(snapshotDate)
+          : null,
 
-  }));
+      "__snapshot_order":
+        snapshotOrder,
+
+      "__row_order":
+        rowOrder,
+
+    })
+  );
 
 }
 
@@ -228,9 +234,8 @@ function addSnapshotMetadata(
 /*
  * Merge rows from multiple uploaded files.
  *
- * CSV and Excel files are already normalized
- * by workbookReader.js, so this function does
- * not need separate CSV logic.
+ * Each workbook is processed separately first.
+ * The processed records are then combined.
  */
 export function buildMultiFileDataset(
   classifiedWorkbooks
@@ -244,7 +249,7 @@ export function buildMultiFileDataset(
 
 
   (classifiedWorkbooks || []).forEach(
-    (workbook) => {
+    (workbook, snapshotOrder) => {
 
       if (!workbook) {
         return;
@@ -252,7 +257,8 @@ export function buildMultiFileDataset(
 
 
       const fileName =
-        workbook.fileName || "Unknown file";
+        workbook.fileName ||
+        "Unknown file";
 
 
       const snapshotDate =
@@ -262,7 +268,7 @@ export function buildMultiFileDataset(
 
 
       /*
-       * First run the normal calculation engine.
+       * Run the existing calculation engine.
        */
       const processed =
         processWorkbook(
@@ -270,11 +276,11 @@ export function buildMultiFileDataset(
         );
 
 
-      /*
-       * Opportunities
-       */
+      // Opportunities
       if (
-        processed.opportunities
+        Array.isArray(
+          processed.opportunities
+        )
       ) {
 
         opportunities.push(
@@ -282,18 +288,19 @@ export function buildMultiFileDataset(
             processed.opportunities,
             fileName,
             snapshotDate,
-            "opportunity"
+            "opportunity",
+            snapshotOrder
           )
         );
 
       }
 
 
-      /*
-       * Leads
-       */
+      // Leads
       if (
-        processed.leads
+        Array.isArray(
+          processed.leads
+        )
       ) {
 
         leads.push(
@@ -301,18 +308,19 @@ export function buildMultiFileDataset(
             processed.leads,
             fileName,
             snapshotDate,
-            "lead"
+            "lead",
+            snapshotOrder
           )
         );
 
       }
 
 
-      /*
-       * Activities
-       */
+      // Activities
       if (
-        processed.activities
+        Array.isArray(
+          processed.activities
+        )
       ) {
 
         activities.push(
@@ -320,16 +328,21 @@ export function buildMultiFileDataset(
             processed.activities,
             fileName,
             snapshotDate,
-            "activity"
+            "activity",
+            snapshotOrder
           )
         );
 
       }
 
 
+      // File summary
       fileSummaries.push({
 
         fileName,
+
+        fileType:
+          workbook.fileType || null,
 
         snapshotDate:
           snapshotDate
@@ -338,22 +351,17 @@ export function buildMultiFileDataset(
 
         snapshotMonth:
           snapshotDate
-            ? formatMonth(
-                snapshotDate
-              )
+            ? formatMonth(snapshotDate)
             : null,
 
         opportunities:
-          processed.opportunities?.length ||
-          0,
+          processed.opportunities?.length || 0,
 
         leads:
-          processed.leads?.length ||
-          0,
+          processed.leads?.length || 0,
 
         activities:
-          processed.activities?.length ||
-          0,
+          processed.activities?.length || 0,
 
         unknownSheets:
           processed.unknown || [],
@@ -383,13 +391,17 @@ export function buildMultiFileDataset(
  * Get the latest record for each Opportunity ID.
  *
  * This creates the CURRENT STATE dataset.
+ *
+ * All historical snapshots remain available
+ * in the main opportunities array.
  */
 export function getCurrentOpportunities(
   opportunities
 ) {
 
-  const latestById =
-    new Map();
+  const latestById = new Map();
+
+  const rowsWithoutId = [];
 
 
   (opportunities || []).forEach(
@@ -402,16 +414,22 @@ export function getCurrentOpportunities(
             "Opportunity ID",
             "Opportunity Id",
             "OpportunityID",
+            "Opportunity_ID",
           ]
         );
 
 
+      // Preserve rows without an Opportunity ID.
       if (
         id === null ||
         id === undefined ||
         String(id).trim() === ""
       ) {
+
+        rowsWithoutId.push(row);
+
         return;
+
       }
 
 
@@ -449,35 +467,74 @@ export function getCurrentOpportunities(
         );
 
 
-      /*
-       * If the current record has a newer
-       * snapshot date, replace the old one.
-       */
+      let shouldReplace = false;
+
+
       if (
         currentDate &&
         existingDate &&
-        currentDate > existingDate
+        currentDate.getTime() !== existingDate.getTime()
       ) {
 
-        latestById.set(
-          opportunityId,
-          row
-        );
+        shouldReplace =
+          currentDate > existingDate;
 
-        return;
+      } else if (
+        currentDate &&
+        !existingDate
+      ) {
+
+        shouldReplace = true;
+
+      } else if (
+        !currentDate &&
+        existingDate
+      ) {
+
+        shouldReplace = false;
+
+      } else {
+
+        /*
+         * If dates are equal or unavailable,
+         * the later uploaded snapshot wins.
+         */
+
+        const existingSnapshotOrder =
+          Number(
+            existing["__snapshot_order"] ?? -1
+          );
+
+
+        const currentSnapshotOrder =
+          Number(
+            row["__snapshot_order"] ?? -1
+          );
+
+
+        const existingRowOrder =
+          Number(
+            existing["__row_order"] ?? -1
+          );
+
+
+        const currentRowOrder =
+          Number(
+            row["__row_order"] ?? -1
+          );
+
+
+        shouldReplace =
+          currentSnapshotOrder > existingSnapshotOrder ||
+          (
+            currentSnapshotOrder === existingSnapshotOrder &&
+            currentRowOrder >= existingRowOrder
+          );
 
       }
 
 
-      /*
-       * If the existing record has no valid
-       * snapshot date but the new record does,
-       * prefer the new record.
-       */
-      if (
-        currentDate &&
-        !existingDate
-      ) {
+      if (shouldReplace) {
 
         latestById.set(
           opportunityId,
@@ -490,8 +547,9 @@ export function getCurrentOpportunities(
   );
 
 
-  return Array.from(
-    latestById.values()
-  );
+  return [
+    ...latestById.values(),
+    ...rowsWithoutId,
+  ];
 
 }

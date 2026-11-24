@@ -17,7 +17,10 @@ import CustomCharts from "./pages/CustomCharts";
 
 import { readWorkbook } from "./parser/workbookReader";
 import { classifySheets } from "./parser/sheetClassifier";
-import { processWorkbook } from "./calculations/dataProcessor";
+import {
+  buildMultiFileDataset,
+  getCurrentOpportunities,
+} from "./calculations/multiFileProcessor";
 
 
 /* =========================================================
@@ -336,206 +339,105 @@ function App() {
 
 
   /* =======================================================
-     BUILD DASHBOARD
+     BUILD DASHBOARD — SINGLE + MULTI-FILE PIPELINE
   ======================================================= */
 
   async function buildDashboard() {
-
-    if (
-      files.length === 0
-    ) {
-
-      alert(
-        "Please upload at least one file."
-      );
-
+    if (files.length === 0) {
+      alert("Please upload at least one file.");
       return;
-
     }
-
 
     setLoading(true);
 
-
     try {
+      const classifiedWorkbooks = [];
 
-      const processedFiles = [];
-
-
-      for (
-        const file of files
-      ) {
-
-        console.log(
-          `Reading ${file.name}...`
-        );
-
-
-        /*
-         * readWorkbook supports:
-         * - .xlsx
-         * - .xls
-         * - .csv
-         *
-         * CSV files are normalized into
-         * the same workbook structure as
-         * Excel files.
-         */
+      // Read and classify every selected file before merging anything.
+      for (const file of files) {
+        console.log(`Reading ${file.name}...`);
 
         try {
+          const workbook = await readWorkbook(file);
 
-          const workbook =
-            await readWorkbook(
-              file
-            );
+          console.log(`Sheets found in ${file.name}:`, workbook.sheetNames);
 
+          const classified = classifySheets(workbook.sheets);
+          console.log(`Classification for ${file.name}:`, classified);
 
-          console.log(
-            "Sheets found:",
-            workbook.sheetNames
+          const hasRecognizedData = Boolean(
+            classified.opportunities ||
+            classified.leads ||
+            classified.activities
           );
 
-
-          const classified =
-            classifySheets(
-              workbook.sheets
+          if (!hasRecognizedData) {
+            console.warn(
+              `No Opportunities, Leads or Activities sheet was recognized in ${file.name}.`,
+              classified.unknown
             );
+          }
 
-
-          console.log(
-            "Classification:",
-            classified
-          );
-
-
-          const processed =
-            processWorkbook(
-              classified
-            );
-
-
-          console.log(
-            "Processed file:",
-            processed
-          );
-
-
-          processedFiles.push({
-
-            fileName:
-              file.name,
-
-            fileType:
-              workbook.fileType,
-
-            ...processed,
-
+          classifiedWorkbooks.push({
+            fileName: file.name,
+            fileType: workbook.fileType,
+            ...classified,
           });
-
         } catch (fileError) {
-
           throw new Error(
-            `${file.name}: ${
-              fileError?.message ||
-              "Could not process this file."
-            }`
+            `${file.name}: ${fileError?.message || "Could not process this file."}`
           );
-
         }
-
       }
 
+      // Use the same pipeline even for one file so the data shape is stable.
+      const dataset = buildMultiFileDataset(classifiedWorkbooks);
+      const currentOpportunities = getCurrentOpportunities(
+        dataset.opportunities
+      );
 
-      /* =====================================================
-         DATA STRUCTURE
-      ===================================================== */
+      const hasAnyData =
+        dataset.opportunities.length > 0 ||
+        dataset.leads.length > 0 ||
+        dataset.activities.length > 0;
 
-      if (
-        processedFiles.length === 1
-      ) {
-
-        setData(
-          processedFiles[0]
+      if (!hasAnyData) {
+        throw new Error(
+          "No usable Opportunities, Leads or Activities data was found in the uploaded files. Please check the sheet names and column headers."
         );
-
-      } else {
-
-        const combined = {
-
-          files:
-            processedFiles,
-
-          fileTypes:
-            processedFiles.map(
-              (file) =>
-                file.fileType
-            ),
-
-          opportunities:
-            processedFiles.flatMap(
-              (file) =>
-                file.opportunities || []
-            ),
-
-          leads:
-            processedFiles.flatMap(
-              (file) =>
-                file.leads || []
-            ),
-
-          activities:
-            processedFiles.flatMap(
-              (file) =>
-                file.activities || []
-            ),
-
-        };
-
-
-        setData(
-          combined
-        );
-
       }
 
+      const finalData = {
+        ...dataset,
+        // Full history is retained in opportunities for month-wise analysis.
+        // Current state is separately exposed for current-state dashboards.
+        currentOpportunities,
+        opportunitySnapshots: dataset.opportunities,
+        files: classifiedWorkbooks.map((workbook) => ({
+          fileName: workbook.fileName,
+          fileType: workbook.fileType || null,
+        })),
+      };
 
-      /* =====================================================
-         APPLY SAVED LANDING PAGE
-      ===================================================== */
+      console.log("MULTI-FILE DATASET:", finalData);
+      console.log("Opportunity snapshots:", dataset.opportunities.length);
+      console.log("Current unique opportunities:", currentOpportunities.length);
+      console.log("Total leads:", dataset.leads.length);
+      console.log("Total activities:", dataset.activities.length);
+      console.log("File summaries:", dataset.fileSummaries);
 
-      setActivePage(
-        getLandingPage()
-      );
-
-
-      console.log(
-        "FINAL DASHBOARD DATA:",
-        processedFiles
-      );
-
-
+      setData(finalData);
+      setActivePage(getLandingPage());
     } catch (error) {
-
-      console.error(
-        "Dashboard build error:",
-        error
-      );
-
-
+      console.error("Dashboard build error:", error);
       alert(
         error?.message ||
-        "Something went wrong while reading the uploaded file."
+        "Something went wrong while processing the uploaded files."
       );
-
-
     } finally {
-
       setLoading(false);
-
     }
-
   }
-
 
   /* =========================================================
      PAGE RENDERER
