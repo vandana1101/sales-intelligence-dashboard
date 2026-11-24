@@ -32,6 +32,8 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import ExcelExportButton from "../components/dashboard/ExcelExportButton";
+import MultiSelectFilter from "../components/dashboard/MultiSelectFilter";
 
 
 /* =========================================================
@@ -271,26 +273,7 @@ function getRelatedTo(row) {
 
 
 function getDateValue(row) {
-
-  return text(
-    getField(row, [
-
-      "Activity Date",
-      "Activity date",
-      "Date",
-      "Created Date",
-      "Created date",
-      "Created Time",
-      "Created At",
-      "Task Date",
-      "Due Date",
-      "Due date",
-      "Start Date",
-      "Start date",
-
-    ])
-  );
-
+  return text(getField(row, ["Created Time", "Activity Date", "Activity date", "Date", "Created Date", "Created date", "Created At", "Task Date", "Due Date", "Due date", "Start Date", "Start date"]));
 }
 
 
@@ -298,100 +281,62 @@ function getDateValue(row) {
    DATE PARSER
 ========================================================= */
 
-function parseDate(value) {
 
-  if (!value) {
-    return null;
+function parseCreatedTimeDate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
-
-
-  const direct =
-    new Date(value);
-
-
-  if (
-    !Number.isNaN(
-      direct.getTime()
-    )
-  ) {
-
-    return direct;
-
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const monthNames = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  const named = raw.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?)?$/i);
+  if (named) {
+    const day = Number(named[1]);
+    const month = monthNames[named[2].slice(0, 3).toLowerCase()];
+    let year = Number(named[3]);
+    if (year < 100) year += year >= 50 ? 1900 : 2000;
+    let hours = Number(named[4] || 0);
+    const minutes = Number(named[5] || 0);
+    const seconds = Number(named[6] || 0);
+    if (named[7]) {
+      const meridiem = named[7].toUpperCase();
+      if (meridiem === "PM" && hours < 12) hours += 12;
+      if (meridiem === "AM" && hours === 12) hours = 0;
+    }
+    if (month === undefined) return null;
+    const date = new Date(year, month, day, hours, minutes, seconds);
+    return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
   }
-
-
-  /*
-    Handle common DD-MMM-YY
-    formats such as:
-
-    8-Apr-26
-    31-Mar-26
-  */
-
-  const match =
-    String(value).match(
-      /^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{2,4})/
-    );
-
-
-  if (!match) {
-    return null;
+  const numeric = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const month = Number(numeric[2]) - 1;
+    let year = Number(numeric[3]);
+    if (year < 100) year += year >= 50 ? 1900 : 2000;
+    const date = new Date(year, month, day, Number(numeric[4] || 0), Number(numeric[5] || 0), Number(numeric[6] || 0));
+    return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
   }
-
-
-  const day =
-    Number(match[1]);
-
-
-  const monthText =
-    match[2]
-      .slice(0, 3)
-      .toLowerCase();
-
-
-  const yearRaw =
-    Number(match[3]);
-
-
-  const months = {
-
-    jan: 0,
-    feb: 1,
-    mar: 2,
-    apr: 3,
-    may: 4,
-    jun: 5,
-    jul: 6,
-    aug: 7,
-    sep: 8,
-    oct: 9,
-    nov: 10,
-    dec: 11,
-
-  };
-
-
-  if (
-    months[monthText] ===
-    undefined
-  ) {
-    return null;
-  }
-
-
-  const year =
-    yearRaw < 100
-      ? 2000 + yearRaw
-      : yearRaw;
-
-
-  return new Date(
-    year,
-    months[monthText],
-    day
-  );
-
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
+
+function getCreatedTimeDate(row) {
+  return parseCreatedTimeDate(getField(row, ["Created Time"]));
+}
+
+function getCreatedTimeFilters(row) {
+  const date = getCreatedTimeDate(row);
+  if (!date) return { year: "Unknown", month: "Unknown", week: "Unknown" };
+  const month = date.toLocaleString("en-US", { month: "short", year: "numeric" });
+  const weekOfMonth = Math.ceil(date.getDate() / 7);
+  const monthShort = date.toLocaleString("en-US", { month: "short" });
+  return { year: String(date.getFullYear()), month, week: `Week ${weekOfMonth} ${monthShort} ${date.getFullYear()}` };
+}
+
+function parseDate(value) { return parseCreatedTimeDate(value); }
 
 
 /* =========================================================
@@ -659,6 +604,10 @@ function Activities({
   const [ageFilter, setAgeFilter] =
     useState("All");
 
+  const [yearFilter, setYearFilter] = useState([]);
+  const [monthFilter, setMonthFilter] = useState([]);
+  const [weekFilter, setWeekFilter] = useState([]);
+
 
   /* =======================================================
      FILTER OPTIONS
@@ -707,6 +656,13 @@ function Activities({
               getPriority
             )
           ),
+
+        years: unique(activities.map((row) => getCreatedTimeFilters(row).year)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+        months: unique(activities.map((row) => getCreatedTimeFilters(row).month)).sort((a, b) => new Date(b) - new Date(a)),
+        weeks: unique(activities.map((row) => getCreatedTimeFilters(row).week)).sort((a, b) => {
+          const parse = (value) => { const match = value.match(/Week (\d+) (\w+) (\d{4})/); return match ? Number(match[3]) * 100 + Number(match[1]) : -1; };
+          return parse(b) - parse(a);
+        }),
 
       };
 
@@ -777,22 +733,13 @@ function Activities({
               priorityFilter;
 
 
-          const matchesAge =
-            ageFilter === "All" ||
-            getAgeBucket(
-              getAge(row)
-            ) ===
-              ageFilter;
+          const matchesAge = ageFilter === "All" || getAgeBucket(getAge(row)) === ageFilter;
+          const time = getCreatedTimeFilters(row);
+          const matchesYear = yearFilter.length === 0 || yearFilter.includes(time.year);
+          const matchesMonth = monthFilter.length === 0 || monthFilter.includes(time.month);
+          const matchesWeek = weekFilter.length === 0 || weekFilter.includes(time.week);
 
-
-          return (
-            matchesSearch &&
-            matchesType &&
-            matchesOwner &&
-            matchesStatus &&
-            matchesPriority &&
-            matchesAge
-          );
+          return matchesSearch && matchesType && matchesOwner && matchesStatus && matchesPriority && matchesAge && matchesYear && matchesMonth && matchesWeek;
 
         }
       );
@@ -812,6 +759,9 @@ function Activities({
       priorityFilter,
 
       ageFilter,
+      yearFilter,
+      monthFilter,
+      weekFilter,
 
     ]);
 
@@ -1160,6 +1110,30 @@ function Activities({
      AGE DATA
   ======================================================= */
 
+  const modeAssignedData = useMemo(() => {
+    const map = new Map();
+    filteredActivities.forEach((row) => {
+      const mode = text(getField(row, ["Mode of meeting", "Mode Of Meeting", "Mode of Meeting"])) || "Unknown";
+      const owner = text(getField(row, ["Assigned to", "Assigned To", "Owner"])) || "Unassigned";
+      const key = `${mode}|||${owner}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return [...map.entries()].map(([key, count]) => {
+      const [mode, owner] = key.split("|||");
+      return { mode, assignedTo: owner, count };
+    }).sort((a, b) => b.count - a.count || a.mode.localeCompare(b.mode));
+  }, [filteredActivities]);
+
+  const modeNames = useMemo(() => [...new Set(modeAssignedData.map((item) => item.mode))].sort(), [modeAssignedData]);
+  const modeAssignedChartData = useMemo(() => {
+    const map = new Map();
+    modeAssignedData.forEach((item) => {
+      if (!map.has(item.assignedTo)) map.set(item.assignedTo, { assignedTo: item.assignedTo });
+      map.get(item.assignedTo)[item.mode] = item.count;
+    });
+    return [...map.values()].sort((a, b) => a.assignedTo.localeCompare(b.assignedTo));
+  }, [modeAssignedData]);
+
   const ageData =
     useMemo(() => {
 
@@ -1295,6 +1269,9 @@ function Activities({
     setPriorityFilter("All");
 
     setAgeFilter("All");
+    setYearFilter([]);
+    setMonthFilter([]);
+    setWeekFilter([]);
 
   }
 
@@ -1305,7 +1282,8 @@ function Activities({
     ownerFilter !== "All" ||
     statusFilter !== "All" ||
     priorityFilter !== "All" ||
-    ageFilter !== "All";
+    ageFilter !== "All" ||
+    yearFilter.length > 0 || monthFilter.length > 0 || weekFilter.length > 0;
 
 
   /* =======================================================
@@ -1368,23 +1346,23 @@ function Activities({
         subtitle={`${filteredActivities.length} of ${activities.length} activities`}
 
         action={
-
-          <button
-            onClick={() =>
-              downloadCSV(
-                filteredActivities,
-                "activities.csv"
-              )
-            }
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm"
-          >
-
-            <Download size={16} />
-
-            Export CSV
-
-          </button>
-
+          <ExcelExportButton
+            fileName="activities-dashboard.xlsx"
+            sections={[
+              { key: "records", label: "Filtered Activity Records", rows: filteredActivities },
+              { key: "kpis", label: "Activity KPI Summary", rows: [metrics] },
+              { key: "types", label: "Activity Mix", rows: typeData },
+              { key: "owners", label: "Activities by Owner", rows: ownerData },
+              { key: "status", label: "Activity Status", rows: statusData },
+              { key: "priority", label: "Activity Priority", rows: priorityData },
+              { key: "monthly", label: "Activity Trend", rows: monthlyData },
+              { key: "age", label: "Activity Age Distribution", rows: ageData },
+              { key: "top-users", label: "Top Activity Users", rows: topUsers },
+              { key: "aging", label: "Aging Activities", rows: agingActivities },
+              { key: "mode-owner", label: "Mode of Meeting by Assigned To", rows: modeAssignedData },
+              { key: "mode-owner-chart", label: "Meeting Mode Pivot by Owner", rows: modeAssignedChartData },
+            ]}
+          />
         }
 
       />
@@ -1585,6 +1563,11 @@ function Activities({
 
           </select>
 
+
+          {/* Created Time filters */}
+          <MultiSelectFilter label="years" options={filterOptions.years} selected={yearFilter} onChange={setYearFilter} />
+          <MultiSelectFilter label="months" options={filterOptions.months} selected={monthFilter} onChange={setMonthFilter} />
+          <MultiSelectFilter label="weeks" options={filterOptions.weeks} selected={weekFilter} onChange={setWeekFilter} />
 
           {/* Clear */}
 
@@ -1826,6 +1809,11 @@ function Activities({
 
       </div>
 
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-6">
+        <ChartCard title="Mode of Meeting × Assigned To" subtitle="Activity count by meeting mode and owner"><div className="h-[360px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={modeAssignedData.slice(0, 18)} layout="vertical" margin={{ left: 24, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="assignedTo" width={120} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="count" name="Activities" fill="#6366f1" radius={[0, 6, 6, 0]} /></BarChart></ResponsiveContainer></div></ChartCard>
+        <ChartCard title="Meeting Mode & Owner Count" subtitle="Detailed count table"><div className="max-h-[360px] overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-2 text-left">Mode of Meeting</th><th className="px-3 py-2 text-left">Assigned To</th><th className="px-3 py-2 text-right">Count</th></tr></thead><tbody>{modeAssignedData.map((item, index) => <tr key={`${item.mode}-${item.assignedTo}-${index}`} className="border-t border-slate-100"><td className="px-3 py-2">{item.mode}</td><td className="px-3 py-2">{item.assignedTo}</td><td className="px-3 py-2 text-right font-semibold">{item.count}</td></tr>)}</tbody></table></div></ChartCard>
+      </div>
 
       {/* ==================================================
           OWNER + STATUS

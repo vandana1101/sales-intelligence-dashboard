@@ -29,6 +29,7 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import ExcelExportButton from "../components/dashboard/ExcelExportButton";
 
 
 /* =========================================================
@@ -1983,9 +1984,22 @@ export default function WonAnalysis({
 
       <SectionHeader
         title="Won Analysis"
-        subtitle="
-          Analysis of won opportunities based directly on the Opportunities dataset
-        "
+        subtitle="Analysis of won opportunities based directly on the Opportunities dataset"
+        action={
+          <ExcelExportButton
+            fileName="won-analysis-dashboard.xlsx"
+            sections={[
+              { key: "records", label: "Filtered Won Opportunities", rows: filtered },
+              { key: "kpis", label: "Won KPI Summary", rows: [metrics] },
+              { key: "deal-size", label: "Won by Deal Size", rows: dealSizeData },
+              { key: "reasons", label: "Won Reason Breakdown", rows: reasonData },
+              { key: "verticals", label: "Won by PCS Vertical", rows: pcsData },
+              { key: "regions", label: "Won by Region", rows: regionData },
+              { key: "services", label: "Won by Services", rows: serviceData },
+              { key: "years", label: "Won by Year", rows: yearly },
+            ]}
+          />
+        }
       />
 
 

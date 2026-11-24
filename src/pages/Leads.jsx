@@ -31,6 +31,8 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import ExcelExportButton from "../components/dashboard/ExcelExportButton";
+import MultiSelectFilter from "../components/dashboard/MultiSelectFilter";
 
 
 /* =========================================================
@@ -215,19 +217,61 @@ function getRegion(row) {
 
 
 function getDateValue(row) {
+  return text(getField(row, ["Created Time", "Lead Created Date", "Created Date", "Created date", "Lead Date", "Date", "Created At"]));
+}
 
-  return text(
-    getField(row, [
-      "Lead Created Date",
-      "Created Date",
-      "Created date",
-      "Lead Date",
-      "Date",
-      "Created Time",
-      "Created At",
-    ])
-  );
+function parseCreatedTimeDate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const monthNames = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  const named = raw.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?)?$/i);
+  if (named) {
+    const day = Number(named[1]);
+    const month = monthNames[named[2].slice(0, 3).toLowerCase()];
+    let year = Number(named[3]);
+    if (year < 100) year += year >= 50 ? 1900 : 2000;
+    let hours = Number(named[4] || 0);
+    const minutes = Number(named[5] || 0);
+    const seconds = Number(named[6] || 0);
+    if (named[7]) {
+      const meridiem = named[7].toUpperCase();
+      if (meridiem === "PM" && hours < 12) hours += 12;
+      if (meridiem === "AM" && hours === 12) hours = 0;
+    }
+    if (month === undefined) return null;
+    const date = new Date(year, month, day, hours, minutes, seconds);
+    return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
+  }
+  const numeric = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const month = Number(numeric[2]) - 1;
+    let year = Number(numeric[3]);
+    if (year < 100) year += year >= 50 ? 1900 : 2000;
+    const date = new Date(year, month, day, Number(numeric[4] || 0), Number(numeric[5] || 0), Number(numeric[6] || 0));
+    return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day ? date : null;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
+function getCreatedTimeDate(row) {
+  return parseCreatedTimeDate(getField(row, ["Created Time"]));
+}
+
+function getCreatedTimeFilters(row) {
+  const date = getCreatedTimeDate(row);
+  if (!date) return { year: "Unknown", month: "Unknown", week: "Unknown" };
+  const month = date.toLocaleString("en-US", { month: "short", year: "numeric" });
+  const weekOfMonth = Math.ceil(date.getDate() / 7);
+  const monthShort = date.toLocaleString("en-US", { month: "short" });
+  return { year: String(date.getFullYear()), month, week: `Week ${weekOfMonth} ${monthShort} ${date.getFullYear()}` };
 }
 
 
@@ -481,6 +525,10 @@ function Leads({
   const [ageFilter, setAgeFilter] =
     useState("All");
 
+  const [yearFilter, setYearFilter] = useState([]);
+  const [monthFilter, setMonthFilter] = useState([]);
+  const [weekFilter, setWeekFilter] = useState([]);
+
 
   /* =======================================================
      FILTER OPTIONS
@@ -528,6 +576,13 @@ function Leads({
               getRegion
             )
           ),
+
+        years: unique(leads.map((row) => getCreatedTimeFilters(row).year)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+        months: unique(leads.map((row) => getCreatedTimeFilters(row).month)).sort((a, b) => new Date(b) - new Date(a)),
+        weeks: unique(leads.map((row) => getCreatedTimeFilters(row).week)).sort((a, b) => {
+          const parse = (value) => { const match = value.match(/Week (\d+) (\w+) (\d{4})/); return match ? Number(match[3]) * 100 + Number(match[1]) : -1; };
+          return parse(b) - parse(a);
+        }),
 
       };
 
@@ -594,18 +649,15 @@ function Leads({
 
           const matchesAge =
             ageFilter === "All" ||
-            getAgeBucket(
-              getAge(row)
-            ) === ageFilter;
-
+            getAgeBucket(getAge(row)) === ageFilter;
+          const time = getCreatedTimeFilters(row);
+          const matchesYear = yearFilter.length === 0 || yearFilter.includes(time.year);
+          const matchesMonth = monthFilter.length === 0 || monthFilter.includes(time.month);
+          const matchesWeek = weekFilter.length === 0 || weekFilter.includes(time.week);
 
           return (
-            matchesSearch &&
-            matchesStatus &&
-            matchesSource &&
-            matchesOwner &&
-            matchesRegion &&
-            matchesAge
+            matchesSearch && matchesStatus && matchesSource && matchesOwner &&
+            matchesRegion && matchesAge && matchesYear && matchesMonth && matchesWeek
           );
 
         }
@@ -619,6 +671,9 @@ function Leads({
       ownerFilter,
       regionFilter,
       ageFilter,
+      yearFilter,
+      monthFilter,
+      weekFilter,
     ]);
 
 
@@ -930,13 +985,9 @@ function Leads({
       filteredLeads.forEach(
         (row) => {
 
-          const rawDate =
-            getDateValue(row);
-
-
-          if (!rawDate) {
-            return;
-          }
+          const rawDate = getDateValue(row);
+          const parsed = getCreatedTimeDate(row);
+          if (!rawDate || !parsed) return;
 
 
           /*
@@ -947,30 +998,7 @@ function Leads({
             dates.
           */
 
-          let label =
-            rawDate;
-
-
-          const parsed =
-            new Date(rawDate);
-
-
-          if (
-            !Number.isNaN(
-              parsed.getTime()
-            )
-          ) {
-
-            label =
-              parsed.toLocaleDateString(
-                "en-US",
-                {
-                  month: "short",
-                  year: "numeric",
-                }
-              );
-
-          }
+          const label = parsed.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 
 
           map[label] =
@@ -1113,6 +1141,9 @@ function Leads({
     setRegionFilter("All");
 
     setAgeFilter("All");
+    setYearFilter([]);
+    setMonthFilter([]);
+    setWeekFilter([]);
 
   }
 
@@ -1123,7 +1154,8 @@ function Leads({
     sourceFilter !== "All" ||
     ownerFilter !== "All" ||
     regionFilter !== "All" ||
-    ageFilter !== "All";
+    ageFilter !== "All" ||
+    yearFilter.length > 0 || monthFilter.length > 0 || weekFilter.length > 0;
 
 
   /* =======================================================
@@ -1186,23 +1218,21 @@ function Leads({
         subtitle={`${filteredLeads.length} of ${leads.length} leads`}
 
         action={
-
-          <button
-            onClick={() =>
-              downloadCSV(
-                filteredLeads,
-                "leads.csv"
-              )
-            }
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm"
-          >
-
-            <Download size={16} />
-
-            Export CSV
-
-          </button>
-
+          <ExcelExportButton
+            fileName="leads-dashboard.xlsx"
+            sections={[
+              { key: "records", label: "Filtered Lead Records", rows: filteredLeads },
+              { key: "kpis", label: "Lead KPI Summary", rows: [metrics] },
+              { key: "status", label: "Lead Status", rows: statusData },
+              { key: "source", label: "Leads by Source", rows: sourceData },
+              { key: "owner", label: "Leads by Owner", rows: ownerData },
+              { key: "region", label: "Leads by Region", rows: regionData },
+              { key: "age", label: "Lead Age Distribution", rows: ageData },
+              { key: "monthly", label: "Lead Creation Trend", rows: monthlyData },
+              { key: "conversion", label: "Conversion by Source", rows: conversionBySource },
+              { key: "aging", label: "Aging Leads", rows: agingLeads },
+            ]}
+          />
         }
 
       />
@@ -1403,6 +1433,11 @@ function Leads({
 
           </select>
 
+
+          {/* Created Time filters */}
+          <MultiSelectFilter label="years" options={filterOptions.years} selected={yearFilter} onChange={setYearFilter} />
+          <MultiSelectFilter label="months" options={filterOptions.months} selected={monthFilter} onChange={setMonthFilter} />
+          <MultiSelectFilter label="weeks" options={filterOptions.weeks} selected={weekFilter} onChange={setWeekFilter} />
 
           {/* Clear */}
 

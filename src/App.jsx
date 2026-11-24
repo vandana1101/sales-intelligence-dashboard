@@ -8,6 +8,7 @@ import Sidebar from "./components/dashboard/Sidebar";
 import Overview from "./pages/Overview";
 import Opportunities from "./pages/Opportunities";
 import WonAnalysis from "./pages/WonAnalysis";
+import LossAnalysis from "./pages/LossAnalysis";
 import Leads from "./pages/Leads";
 import Activities from "./pages/Activities";
 import Insights from "./pages/Insights";
@@ -301,6 +302,9 @@ function App() {
     "Won Analysis":
       "won-analysis",
 
+    "Loss Analysis":
+      "loss-analysis",
+
     Leads:
       "leads",
 
@@ -491,6 +495,10 @@ function App() {
 
         );
 
+      case "loss-analysis":
+        return (
+          <LossAnalysis data={data} settings={settings} />
+        );
 
       case "leads":
 

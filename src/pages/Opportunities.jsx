@@ -36,6 +36,7 @@ import {
 import KPI from "../components/dashboard/KPI";
 import ChartCard from "../components/dashboard/ChartCard";
 import SectionHeader from "../components/dashboard/SectionHeader";
+import ExcelExportButton from "../components/dashboard/ExcelExportButton";
 import {
   getOpportunityValue,
   getOpportunityValueCrores,
@@ -1944,18 +1945,29 @@ function Opportunities({
         title="Opportunity Intelligence"
         subtitle={`${filteredOpportunities.length} of ${opportunities.length} opportunities`}
         action={
-          <button
-            onClick={() =>
-              downloadCSV(
-                filteredOpportunities,
-                "opportunities.csv"
-              )
-            }
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 shadow-sm"
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
+          <ExcelExportButton
+            fileName="opportunities-dashboard.xlsx"
+            sections={[
+              { key: "records", label: "Filtered Opportunity Records", rows: filteredOpportunities },
+              { key: "kpis", label: "Opportunity KPI Summary", rows: [metrics] },
+              { key: "outcomes", label: "Outcome Summary", rows: outcomeData },
+              { key: "stages", label: "Opportunity Stage Summary", rows: stageData },
+              { key: "visible-stages", label: "Visible Pipeline Stage Chart", rows: visibleStageData },
+              { key: "owner-stage", label: "Assigned To by Opportunity Stage", rows: ownerStageData.rows },
+              { key: "owners", label: "Representatives", rows: representativeData },
+              { key: "owner-performance", label: "Sales Owner Performance", rows: ownerData },
+              { key: "verticals", label: "PCS Vertical Summary", rows: pcsVerticalData },
+              { key: "regions", label: "Regional Summary", rows: regionData },
+              { key: "monthly", label: "Monthly Opportunity Creation", rows: monthlyData },
+              { key: "weekly", label: "Weekly Opportunity Creation", rows: weeklyData },
+              { key: "age", label: "Opportunity Age Distribution", rows: ageData },
+              { key: "value-buckets", label: "Value Buckets", rows: valueBucketData },
+              { key: "process-duration", label: "Process Duration", rows: processDurationData },
+              { key: "proposal-delay", label: "Proposal Delay", rows: proposalDelayData },
+              { key: "top-opportunities", label: "Top Opportunities", rows: topOpportunities },
+              { key: "at-risk", label: "At Risk Opportunities", rows: atRiskOpportunities },
+            ]}
+          />
         }
       />
 

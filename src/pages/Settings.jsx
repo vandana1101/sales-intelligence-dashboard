@@ -520,6 +520,8 @@ function SettingsPage({ data, settings, setSettings, resetSettings }) {
 
               <option>Overview</option>
               <option>Opportunities</option>
+              <option>Won Analysis</option>
+              <option>Loss Analysis</option>
               <option>Leads</option>
               <option>Activities</option>
               <option>Forecast</option>

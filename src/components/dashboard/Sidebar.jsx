@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   BriefcaseBusiness,
   Trophy,
+  TrendingDown,
   Users,
   Activity,
   GitCompareArrows,
@@ -31,6 +32,12 @@ const navigation = [
     id: "won-analysis",
     label: "Won Analysis",
     icon: Trophy,
+  },
+
+  {
+    id: "loss-analysis",
+    label: "Loss Analysis",
+    icon: TrendingDown,
   },
 
   {
