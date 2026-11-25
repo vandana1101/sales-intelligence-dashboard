@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 import {
   BriefcaseBusiness,
@@ -1064,8 +1065,409 @@ function fixedChartDomain(data = [], keys = [], padding = 0.12) {
 }
 
 /* =========================================================
-   MAIN COMPONENT
+   OB TARGET VS ACHIEVEMENT SECTION
 ========================================================= */
+const DEFAULT_OB_TARGETS = [
+  { vertical: "Auto", owner: "Rajesh", q1: 4.8, q2: 7.8, q3: null, q4: null },
+  { vertical: "Auto", owner: "Tapasmaya", q1: null, q2: 25.8, q3: null, q4: null },
+  { vertical: "Ecom", owner: "Sandeep", q1: 1.8, q2: null, q3: null, q4: null },
+  { vertical: "Ecom", owner: "BD-BLR", q1: null, q2: 6, q3: null, q4: null },
+  { vertical: "Ecom", owner: "Sujit kumar", q1: 6.03, q2: null, q3: 2.84, q4: 6.03 },
+  { vertical: "F&L", owner: "BD-MAA", q1: null, q2: 6, q3: null, q4: null },
+  { vertical: "F&L", owner: "Kapil", q1: 4.5, q2: null, q3: null, q4: null },
+  { vertical: "F&L", owner: "BD-NCR", q1: null, q2: null, q3: 2.4, q4: null },
+  { vertical: "FMCD", owner: "Pallavi", q1: null, q2: 6, q3: null, q4: null },
+  { vertical: "FMCD", owner: "Shashank", q1: 3.6, q2: 19.2, q3: 2.64, q4: 2.4 },
+  { vertical: "FMCG", owner: "BD-BLR", q1: null, q2: 6, q3: null, q4: null },
+  { vertical: "FMCG", owner: "Sunil Singh", q1: null, q2: 6.6, q3: 15, q4: null },
+  { vertical: "LSC", owner: "Aditya Pilkhane", q1: null, q2: null, q3: 12, q4: null },
+];
+
+const OB_VERTICAL_ALIASES = {
+  auto: ["automobiles", "automobile", "auto"],
+  ecom: ["e-com", "ecom", "e-commerce", "e commerce"],
+  "f&l": ["fashion&lifestyle", "fashion & lifestyle", "fashion and lifestyle", "f&l"],
+  fmcd: ["fmcd"],
+  fmcg: ["fmcg"],
+  lsc: ["healthcare&pharma", "health care and pharma", "healthcare and pharma", "lsc"],
+};
+
+function normalizeOBText(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function matchOBVertical(targetVertical, opportunityVertical) {
+  const target = normalizeOBText(targetVertical);
+  const opportunity = normalizeOBText(opportunityVertical);
+  const aliases = OB_VERTICAL_ALIASES[String(targetVertical ?? "").trim().toLowerCase()] || [targetVertical];
+  return aliases.some((alias) => normalizeOBText(alias) === opportunity) || target === opportunity;
+}
+
+function parseOBDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && value > 20000 && value < 60000) {
+    return new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+  }
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getOBQuarter(date, fiscalYearStart) {
+  if (!date) return null;
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  const fiscalStart = month >= 3 ? year : year - 1;
+  if (fiscalStart !== fiscalYearStart) return null;
+  return month >= 3 ? Math.floor((month - 3) / 3) + 1 : 4;
+}
+
+function getOBOwnerMatch(targetOwner, opportunityOwner, allOpportunityOwners) {
+  const target = normalizeOBText(targetOwner);
+  const owner = normalizeOBText(opportunityOwner);
+  if (!target || !owner) return false;
+  if (target === owner) return true;
+  // Target workbook uses shortened first names for several employees.
+  // Use a first-name match only when it identifies exactly one owner in the source data.
+  const targetFirst = String(targetOwner).trim().split(/\s+/)[0].toLowerCase();
+  const matchingOwners = [...new Set(allOpportunityOwners)].filter((name) =>
+    String(name).trim().split(/\s+/)[0].toLowerCase() === targetFirst
+  );
+  return matchingOwners.length === 1 && normalizeOBText(matchingOwners[0]) === owner;
+}
+
+function readOBTargetWorkbook(file) {
+  return file.arrayBuffer().then((buffer) => {
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const headerIndex = matrix.findIndex((row) => {
+      const cells = row.map((cell) => normalizeOBText(cell));
+      return cells.includes("vertical") && (cells.includes("region") || cells.includes("individual"));
+    });
+    if (headerIndex < 0) throw new Error("Could not find the Vertical and Region columns in the OB Target sheet.");
+    const headers = matrix[headerIndex].map((cell) => String(cell ?? "").trim());
+    const indexOf = (name) => headers.findIndex((header) => normalizeOBText(header) === normalizeOBText(name));
+    const verticalIndex = indexOf("Vertical");
+    const ownerIndex = indexOf("Region") >= 0 ? indexOf("Region") : indexOf("Individual");
+    const quarterIndexes = [1, 2, 3, 4].map((q) => indexOf(`Q${q}`));
+    const rows = matrix.slice(headerIndex + 1).map((row) => ({
+      vertical: String(row[verticalIndex] ?? "").trim(),
+      owner: String(row[ownerIndex] ?? "").trim(),
+      q1: quarterIndexes[0] >= 0 && row[quarterIndexes[0]] !== null && row[quarterIndexes[0]] !== "" ? number(row[quarterIndexes[0]]) : null,
+      q2: quarterIndexes[1] >= 0 && row[quarterIndexes[1]] !== null && row[quarterIndexes[1]] !== "" ? number(row[quarterIndexes[1]]) : null,
+      q3: quarterIndexes[2] >= 0 && row[quarterIndexes[2]] !== null && row[quarterIndexes[2]] !== "" ? number(row[quarterIndexes[2]]) : null,
+      q4: quarterIndexes[3] >= 0 && row[quarterIndexes[3]] !== null && row[quarterIndexes[3]] !== "" ? number(row[quarterIndexes[3]]) : null,
+    })).filter((row) => row.vertical && row.owner && !/total/i.test(row.owner));
+    if (!rows.length) throw new Error("No individual OB target rows were found in the uploaded workbook.");
+    const fyText = `${file.name} ${matrix.slice(0, headerIndex + 1).flat().join(" ")}`;
+    const fullFyMatch = fyText.match(/FY\\s*[-']?\\s*(20\\d{2})\\s*[-–/]\\s*(\\d{2,4})/i);
+    const shortFyMatch = fyText.match(/FY\\s*[-']?\\s*(\\d{2})\\b/i);
+    let fiscalYearStart = 2026;
+    if (fullFyMatch) fiscalYearStart = Number(fullFyMatch[1]);
+    else if (shortFyMatch) fiscalYearStart = 2000 + Number(shortFyMatch[1]) - 1;
+    return { rows, fiscalYearStart, fileName: file.name };
+  });
+}
+
+function formatOBCr(value) {
+  return `₹${(Number(value) || 0).toFixed(2)} Cr`;
+}
+
+function OBTargetUploadButton() {
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    setUploaded(false);
+    try {
+      const next = await readOBTargetWorkbook(file);
+      try { localStorage.setItem("salesDashboardOBTargets", JSON.stringify(next)); } catch (storageError) {
+        console.warn("Could not persist OB target workbook in this browser.", storageError);
+      }
+      window.dispatchEvent(new CustomEvent("sales-dashboard-ob-targets-updated", { detail: next }));
+      setUploaded(true);
+    } catch (uploadError) {
+      setError(uploadError?.message || "Could not read the OB Target workbook.");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <label className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold cursor-pointer hover:bg-indigo-700">
+        <input type="file" accept=".xlsx,.xls,.xlsm" className="hidden" onChange={handleUpload} />
+        <span>{uploading ? "Uploading..." : uploaded ? "Uploaded ✓" : "Upload OB Target"}</span>
+      </label>
+      {error && <span className="text-xs text-red-600 max-w-xs text-right">{error}</span>}
+    </div>
+  );
+}
+
+function OrderBookTargetSection({ opportunities, compactOnly = false, quarterFilter = [], ownerFilter = [], pcsVerticalFilter = [], onExportData }) {
+  const [targetState, setTargetState] = useState(() => {
+    try {
+      const saved = localStorage.getItem("salesDashboardOBTargets");
+      return saved ? JSON.parse(saved) : { rows: DEFAULT_OB_TARGETS, fiscalYearStart: 2026, fileName: "OB Target 2026-27.xlsx" };
+    } catch {
+      return { rows: DEFAULT_OB_TARGETS, fiscalYearStart: 2026, fileName: "OB Target 2026-27.xlsx" };
+    }
+  });
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const updateTargets = (event) => {
+      const next = event.detail;
+      if (next?.rows) setTargetState(next);
+    };
+    window.addEventListener("sales-dashboard-ob-targets-updated", updateTargets);
+    return () => window.removeEventListener("sales-dashboard-ob-targets-updated", updateTargets);
+  }, []);
+
+  const selectedQuarterNumbers = useMemo(() => {
+    if (!quarterFilter.length) return [1, 2, 3, 4];
+    const matches = quarterFilter.map((label) => {
+      const match = String(label).match(/^Q([1-4])\s+(\d{4})$/);
+      return match && Number(match[2]) === Number(targetState.fiscalYearStart) ? Number(match[1]) : null;
+    }).filter(Boolean);
+    return matches.length ? matches : [];
+  }, [quarterFilter, targetState.fiscalYearStart]);
+
+  const owners = useMemo(() => opportunities.map((row) => text(row["Assigned To"])).filter(Boolean), [opportunities]);
+  const achievementRows = useMemo(() => targetState.rows.map((target) => {
+    const quarterAchievements = [1, 2, 3, 4].map((quarter) => {
+      return opportunities.reduce((sum, opportunity) => {
+        const date = parseOBDate(opportunity["Opportunity Created Date"]);
+        const assignedTo = text(opportunity["Assigned To"]);
+        const vertical = text(opportunity["PCS Vertical"] || opportunity["PCS  Vertical"] || opportunity["PCS_Vertical"]);
+        if (
+          getOBQuarter(date, Number(targetState.fiscalYearStart)) !== quarter ||
+          !matchOBVertical(target.vertical, vertical) ||
+          !getOBOwnerMatch(target.owner, assignedTo, owners)
+        ) return sum;
+        return sum + getOpportunityValueCrores(opportunity);
+      }, 0);
+    });
+    const targets = [target.q1, target.q2, target.q3, target.q4];
+    const totalTarget = targets.reduce((sum, value) => sum + (value == null ? 0 : Number(value)), 0);
+    const totalAchieved = quarterAchievements.reduce((sum, value) => sum + value, 0);
+    return {
+      ...target,
+      hasOwnerMatch: owners.some((owner) => getOBOwnerMatch(target.owner, owner, owners)),
+      quarterAchievements,
+      totalTarget,
+      totalAchieved,
+      achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : null,
+      balance: totalTarget - totalAchieved,
+    };
+  }), [targetState, opportunities, owners]);
+
+  const visibleAchievementRows = useMemo(() => achievementRows.filter((row) => {
+    const ownerMatches = !ownerFilter.length || ownerFilter.some((owner) => getOBOwnerMatch(row.owner, owner, owners));
+    const verticalMatches = !pcsVerticalFilter.length || pcsVerticalFilter.some((vertical) => matchOBVertical(row.vertical, vertical));
+    return ownerMatches && verticalMatches;
+  }), [achievementRows, ownerFilter, pcsVerticalFilter, owners]);
+
+  const totals = useMemo(() => {
+    const target = visibleAchievementRows.reduce((sum, row) => sum + selectedQuarterNumbers.reduce((qSum, q) => {
+      const value = row[`q${q}`];
+      return qSum + (value == null ? 0 : Number(value));
+    }, 0), 0);
+    const achieved = visibleAchievementRows.reduce((sum, row) => sum + selectedQuarterNumbers.reduce((qSum, q) => qSum + (row.quarterAchievements[q - 1] || 0), 0), 0);
+    return { target, achieved, pct: target > 0 ? achieved / target * 100 : 0, balance: target - achieved };
+  }, [visibleAchievementRows, selectedQuarterNumbers]);
+
+  useEffect(() => {
+    if (!onExportData) return;
+    const quarterRows = visibleAchievementRows.map((row) => ({
+      Vertical: row.vertical,
+      Individual: row.owner,
+      Target: row[`q${Number((quarterFilter[0] || "Q1").match(/^Q([1-4])/ )?.[1] || 1)}`] ?? null,
+      Achieved: row.quarterAchievements[Number((quarterFilter[0] || "Q1").match(/^Q([1-4])/ )?.[1] || 1) - 1] || 0,
+      "Annual Target": row.totalTarget,
+      "Annual Achieved": row.totalAchieved,
+      "Achievement %": row.achievementPct,
+      Balance: row.balance,
+    }));
+    onExportData({
+      kpis: [{ "OB Target": totals.target, "OB Achieved": totals.achieved, "Achievement %": totals.pct, Balance: totals.balance }],
+      quarterly: quarterRows,
+      annual: visibleAchievementRows.map((row) => ({ Vertical: row.vertical, Individual: row.owner, Target: row.totalTarget, Achieved: row.totalAchieved, "Achievement %": row.achievementPct, Balance: row.balance })),
+      detail: visibleAchievementRows.map((row) => ({ Vertical: row.vertical, Individual: row.owner, "Q1 Target": row.q1, "Q1 Achieved": row.quarterAchievements[0], "Q2 Target": row.q2, "Q2 Achieved": row.quarterAchievements[1], "Q3 Target": row.q3, "Q3 Achieved": row.quarterAchievements[2], "Q4 Target": row.q4, "Q4 Achieved": row.quarterAchievements[3], "Annual Target": row.totalTarget, "Annual Achieved": row.totalAchieved, "Achievement %": row.achievementPct, Balance: row.balance })),
+    });
+  }, [visibleAchievementRows, totals, quarterFilter, onExportData]);
+
+  const chartQuarter = quarterFilter.length
+    ? `Q${Number(String(quarterFilter[0]).match(/^Q([1-4])/)?.[1] || 1)}`
+    : selectedQuarter;
+
+  const quarterChartData = useMemo(() => visibleAchievementRows.map((row) => {
+    const q = Number(chartQuarter.slice(1)) - 1;
+    return {
+      name: `${row.owner} · ${row.vertical}`,
+      target: row[`q${q + 1}`] == null ? 0 : Number(row[`q${q + 1}`]),
+      achieved: row.quarterAchievements[q],
+      completed: Math.min(row.quarterAchievements[q], row[`q${q + 1}`] == null ? 0 : Number(row[`q${q + 1}`])),
+      remaining: Math.max((row[`q${q + 1}`] == null ? 0 : Number(row[`q${q + 1}`])) - row.quarterAchievements[q], 0),
+      overTarget: Math.max(row.quarterAchievements[q] - (row[`q${q + 1}`] == null ? 0 : Number(row[`q${q + 1}`])), 0),
+      hasTarget: row[`q${q + 1}`] != null,
+    };
+  }).filter((row) => row.hasTarget || row.achieved > 0), [visibleAchievementRows, chartQuarter]);
+
+  const annualChartData = useMemo(() => visibleAchievementRows.map((row) => ({
+    name: `${row.owner} · ${row.vertical}`,
+    target: row.totalTarget,
+    achieved: row.totalAchieved,
+    completed: Math.min(row.totalAchieved, row.totalTarget),
+    remaining: Math.max(row.totalTarget - row.totalAchieved, 0),
+    overTarget: Math.max(row.totalAchieved - row.totalTarget, 0),
+  })).filter((row) => row.target > 0 || row.achieved > 0), [visibleAchievementRows]);
+
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError("");
+    try {
+      const next = await readOBTargetWorkbook(file);
+      setTargetState(next);
+      try { localStorage.setItem("salesDashboardOBTargets", JSON.stringify(next)); } catch (storageError) {
+        console.warn("Could not persist OB target workbook in this browser.", storageError);
+      }
+    } catch (error) {
+      setUploadError(error?.message || "Could not read the OB Target workbook.");
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  };
+
+  if (compactOnly) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+        <KPI title="Total OB Target" value={formatOBCr(totals.target)} subtitle={quarterFilter.length ? "Selected fiscal quarter(s)" : "Full financial year"} icon={Target} iconClass="bg-indigo-50 text-indigo-600" />
+        <KPI title="Total Achieved" value={formatOBCr(totals.achieved)} subtitle="Filtered opportunities" icon={Trophy} iconClass="bg-emerald-50 text-emerald-600" />
+        <KPI title="Achievement %" value={`${totals.pct.toFixed(1)}%`} subtitle="Achieved / target" icon={TrendingUp} iconClass="bg-blue-50 text-blue-600" />
+        <KPI title="OB Balance" value={formatOBCr(totals.balance)} subtitle="Target less achieved" icon={IndianRupee} iconClass="bg-amber-50 text-amber-600" />
+      </div>
+    );
+  }
+
+  return (
+    <section className="space-y-5 mb-8">
+      {achievementRows.some((row) => !row.hasOwnerMatch) && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          No matching Assigned To value was found for: {[...new Set(achievementRows.filter((row) => !row.hasOwnerMatch).map((row) => row.owner))].join(", ")}. Their achieved values remain zero until the owner names match the Opportunity Data.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-6">
+        <ChartCard title="Quarterly Target vs Achieved" subtitle="Individual-wise comparison for the selected quarter">
+          <div className="flex justify-end mb-3">
+            <select value={chartQuarter} onChange={(event) => setSelectedQuarter(event.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+              {["Q1", "Q2", "Q3", "Q4"].map((quarter) => <option key={quarter} value={quarter}>{quarter}</option>)}
+            </select>
+          </div>
+          <div style={{ height: `${Math.max(460, quarterChartData.length * 42 + 90)}px` }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={quarterChartData} layout="vertical" margin={{ top: 8, right: 34, left: 110, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => `${Number(value).toFixed(0)} Cr`} tick={{ fill: "#334155", fontSize: 12, fontWeight: 500 }} />
+                <YAxis type="category" dataKey="name" width={105} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#334155", fontWeight: 500 }} />
+                <Tooltip formatter={(value) => formatOBCr(value)} />
+                <Legend />
+                <Bar dataKey="completed" name="Achieved" stackId="ob" fill="#4f46e5" radius={[0, 0, 0, 0]}>
+                  <LabelList dataKey="completed" position="inside" formatter={(v) => v > 0 ? Number(v).toFixed(1) : ""} fill="#fff" fontSize={10} />
+                </Bar>
+                <Bar dataKey="remaining" name="Target remaining" stackId="ob" fill="#cbd5e1" radius={[0, 5, 5, 0]}>
+                  <LabelList dataKey="target" position="right" formatter={(v) => v > 0 ? Number(v).toFixed(1) : ""} fill="#334155" fontSize={10} />
+                </Bar>
+                <Bar dataKey="overTarget" name="Above target" stackId="ob" fill="#0d9488" radius={[0, 5, 5, 0]}>
+                  <LabelList dataKey="overTarget" position="right" formatter={(v) => v > 0 ? `+${Number(v).toFixed(1)}` : ""} fill="#0f766e" fontSize={10} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Annual Target vs Achieved" subtitle="Individual-wise FY comparison">
+          <div style={{ height: `${Math.max(460, annualChartData.length * 42 + 90)}px` }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={annualChartData} layout="vertical" margin={{ top: 8, right: 34, left: 110, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => `${Number(value).toFixed(0)} Cr`} tick={{ fill: "#334155", fontSize: 12, fontWeight: 500 }} />
+                <YAxis type="category" dataKey="name" width={105} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#334155", fontWeight: 500 }} />
+                <Tooltip formatter={(value) => formatOBCr(value)} />
+                <Legend />
+                <Bar dataKey="completed" name="Achieved" stackId="annual" fill="#0d9488">
+                  <LabelList dataKey="completed" position="inside" formatter={(v) => v > 0 ? Number(v).toFixed(1) : ""} fill="#fff" fontSize={10} />
+                </Bar>
+                <Bar dataKey="remaining" name="Target remaining" stackId="annual" fill="#cbd5e1" radius={[0, 5, 5, 0]}>
+                  <LabelList dataKey="target" position="right" formatter={(v) => v > 0 ? Number(v).toFixed(1) : ""} fill="#334155" fontSize={10} />
+                </Bar>
+                <Bar dataKey="overTarget" name="Above target" stackId="annual" fill="#4f46e5" radius={[0, 5, 5, 0]}>
+                  <LabelList dataKey="overTarget" position="right" formatter={(v) => v > 0 ? `+${Number(v).toFixed(1)}` : ""} fill="#4338ca" fontSize={10} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      </div>
+
+      <ChartCard title="Detailed OB Target vs Achievement" subtitle="Quarterly and annual comparison by vertical and individual · Values in Crores">
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full min-w-[1450px] text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-600">
+                <th rowSpan={2} className="px-3 py-3 text-left border border-slate-200">Vertical</th>
+                <th rowSpan={2} className="px-3 py-3 text-left border border-slate-200">Individual</th>
+                {["Q1", "Q2", "Q3", "Q4"].map((q) => <th key={q} colSpan={2} className="px-3 py-2 text-center border border-slate-200">{q}</th>)}
+                <th rowSpan={2} className="px-3 py-3 text-right border border-slate-200">Annual Target</th>
+                <th rowSpan={2} className="px-3 py-3 text-right border border-slate-200">Annual Achieved</th>
+                <th rowSpan={2} className="px-3 py-3 text-right border border-slate-200">Achievement %</th>
+                <th rowSpan={2} className="px-3 py-3 text-right border border-slate-200">Balance</th>
+              </tr>
+              <tr className="bg-slate-50 text-slate-500">
+                {["Q1", "Q2", "Q3", "Q4"].flatMap((q) => [
+                  <th key={`${q}-t`} className="px-3 py-2 text-right border border-slate-200">Target</th>,
+                  <th key={`${q}-a`} className="px-3 py-2 text-right border border-slate-200">Achieved</th>,
+                ])}
+              </tr>
+            </thead>
+            <tbody>
+              {achievementRows.map((row, index) => (
+                <tr key={`${row.vertical}-${row.owner}-${index}`} className="hover:bg-slate-50">
+                  <td className="px-3 py-2.5 border border-slate-200 font-medium">{row.vertical}</td>
+                  <td className="px-3 py-2.5 border border-slate-200 font-semibold whitespace-nowrap">{row.owner}</td>
+                  {[row.q1, row.q2, row.q3, row.q4].map((target, qIndex) => (
+                    <Fragment key={qIndex}>
+                      <td className="px-3 py-2.5 text-right border border-slate-200">{target == null ? <span className="text-slate-400">No Target</span> : target.toFixed(2)}</td>
+                      <td className="px-3 py-2.5 text-right border border-slate-200">{row.quarterAchievements[qIndex].toFixed(2)}</td>
+                    </Fragment>
+                  ))}
+                  <td className="px-3 py-2.5 text-right border border-slate-200 font-semibold">{row.totalTarget.toFixed(2)}</td>
+                  <td className="px-3 py-2.5 text-right border border-slate-200 font-semibold">{row.totalAchieved.toFixed(2)}</td>
+                  <td className="px-3 py-2.5 text-right border border-slate-200">{row.achievementPct == null ? "—" : `${row.achievementPct.toFixed(1)}%`}</td>
+                  <td className={`px-3 py-2.5 text-right border border-slate-200 font-semibold ${row.balance < 0 ? "text-emerald-600" : "text-slate-700"}`}>{row.balance.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </ChartCard>
+    </section>
+  );
+}
+
 
 function Opportunities({
   data,
@@ -1153,6 +1555,7 @@ function Opportunities({
   const [yearFilter, setYearFilter] = useState([]);
   const [quarterFilter, setQuarterFilter] = useState([]);
   const [openFilter, setOpenFilter] = useState(null);
+  const [obExportData, setObExportData] = useState({ kpis: [], quarterly: [], annual: [], detail: [] });
 
   // Independent fixed-width chart windows. Moving these sliders changes
   // which records are visible, while the chart itself stays the same size.
@@ -1945,6 +2348,8 @@ function Opportunities({
         title="Opportunity Intelligence"
         subtitle={`${filteredOpportunities.length} of ${opportunities.length} opportunities`}
         action={
+          <div className="flex items-center gap-3">
+          <OBTargetUploadButton />
           <ExcelExportButton
             fileName="opportunities-dashboard.xlsx"
             sections={[
@@ -1966,8 +2371,21 @@ function Opportunities({
               { key: "proposal-delay", label: "Proposal Delay", rows: proposalDelayData },
               { key: "top-opportunities", label: "Top Opportunities", rows: topOpportunities },
               { key: "at-risk", label: "At Risk Opportunities", rows: atRiskOpportunities },
+              { key: "ob-kpis", label: "OB Target KPI Summary", rows: obExportData.kpis },
+              { key: "ob-quarterly", label: "OB Quarterly Target vs Achievement", rows: obExportData.quarterly },
+              { key: "ob-annual", label: "OB Annual Target vs Achievement", rows: obExportData.annual },
+              { key: "ob-detail", label: "OB Detailed Target vs Achievement", rows: obExportData.detail },
+              { key: "monthly-performance", label: "Monthly Opportunity Performance", rows: visibleMonthlyData },
+              { key: "monthly-outcomes", label: "Monthly Outcome Value", rows: visibleOutcomeMonthlyData },
+              { key: "weekly-chart", label: "Weekly Opportunity Creation", rows: visibleWeeklyData },
+              { key: "vertical-chart", label: "Pipeline by PCS Vertical", rows: pcsVerticalData },
+              { key: "region-chart", label: "Regional Opportunity Analysis", rows: visibleRegionData },
+              { key: "aging-chart", label: "Aging Risk Monitor", rows: ageData },
+              { key: "representatives-table", label: "Representatives by PCS Vertical", rows: representativeData },
+              { key: "opportunity-register", label: "Opportunity Register", rows: filteredOpportunities },
             ]}
           />
+          </div>
         }
       />
 
@@ -2118,6 +2536,8 @@ function Opportunities({
         />
 
       </div>
+
+      <OrderBookTargetSection opportunities={filteredOpportunities} quarterFilter={quarterFilter} ownerFilter={ownerFilter} pcsVerticalFilter={pcsVerticalFilter} compactOnly />
 
       {/* ===================================================
           HIGH VALUE
@@ -2301,6 +2721,8 @@ function Opportunities({
         </ChartCard>
 
       </div>
+
+      <OrderBookTargetSection opportunities={filteredOpportunities} quarterFilter={quarterFilter} ownerFilter={ownerFilter} pcsVerticalFilter={pcsVerticalFilter} onExportData={setObExportData} />
 
       {/* ===================================================
           PIPELINE BY STAGE
