@@ -1148,11 +1148,17 @@ function readOBTargetWorkbook(file) {
     })).filter((row) => row.vertical && row.owner && !/total/i.test(row.owner));
     if (!rows.length) throw new Error("No individual OB target rows were found in the uploaded workbook.");
     const fyText = `${file.name} ${matrix.slice(0, headerIndex + 1).flat().join(" ")}`;
-    const fullFyMatch = fyText.match(/FY\\s*[-']?\\s*(20\\d{2})\\s*[-–/]\\s*(\\d{2,4})/i);
-    const shortFyMatch = fyText.match(/FY\\s*[-']?\\s*(\\d{2})\\b/i);
-    let fiscalYearStart = 2026;
-    if (fullFyMatch) fiscalYearStart = Number(fullFyMatch[1]);
-    else if (shortFyMatch) fiscalYearStart = 2000 + Number(shortFyMatch[1]) - 1;
+    // Detect the financial year from the uploaded workbook; never assume a default FY.
+    const fullFyMatch = fyText.match(/FY\s*[-']?\s*(20\d{2})\s*[-–/]\s*(\d{2,4})/i);
+    const shortFyMatch = fyText.match(/FY\s*[-']?\s*(\d{2})\b/i);
+    const fiscalYearStart = fullFyMatch
+      ? Number(fullFyMatch[1])
+      : shortFyMatch
+        ? 2000 + Number(shortFyMatch[1]) - 1
+        : null;
+    if (!fiscalYearStart) {
+      throw new Error("Could not identify the financial year. Include it in the OB Target workbook filename or header (for example, FY 2026-27). No default financial year will be assumed.");
+    }
     return { rows, fiscalYearStart, fileName: file.name };
   });
 }
@@ -1174,9 +1180,6 @@ function OBTargetUploadButton() {
     setUploaded(false);
     try {
       const next = await readOBTargetWorkbook(file);
-      try { localStorage.setItem("salesDashboardOBTargets", JSON.stringify(next)); } catch (storageError) {
-        console.warn("Could not persist OB target workbook in this browser.", storageError);
-      }
       window.dispatchEvent(new CustomEvent("sales-dashboard-ob-targets-updated", { detail: next }));
       setUploaded(true);
     } catch (uploadError) {
@@ -1199,17 +1202,9 @@ function OBTargetUploadButton() {
 }
 
 function OrderBookTargetSection({ opportunities, compactOnly = false, quarterFilter = [], ownerFilter = [], pcsVerticalFilter = [], onExportData }) {
-  const [targetState, setTargetState] = useState(() => {
-    try {
-      // Restore only a workbook previously uploaded by the user; never seed sample/default targets.
-      const saved = localStorage.getItem("salesDashboardOBTargets");
-      if (!saved) return EMPTY_OB_TARGET_STATE;
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed?.rows) && parsed.rows.length ? parsed : EMPTY_OB_TARGET_STATE;
-    } catch {
-      return EMPTY_OB_TARGET_STATE;
-    }
-  });
+  // OB targets are intentionally session-only. A fresh workbook upload is required
+  // whenever the dashboard is reopened or refreshed.
+  const [targetState, setTargetState] = useState(EMPTY_OB_TARGET_STATE);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [uploadError, setUploadError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -1330,9 +1325,6 @@ function OrderBookTargetSection({ opportunities, compactOnly = false, quarterFil
     try {
       const next = await readOBTargetWorkbook(file);
       setTargetState(next);
-      try { localStorage.setItem("salesDashboardOBTargets", JSON.stringify(next)); } catch (storageError) {
-        console.warn("Could not persist OB target workbook in this browser.", storageError);
-      }
     } catch (error) {
       setUploadError(error?.message || "Could not read the OB Target workbook.");
     } finally {

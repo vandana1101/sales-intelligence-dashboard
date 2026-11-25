@@ -11,6 +11,7 @@ import {
   Brain,
   Settings,
   Database,
+  FileSpreadsheet,
 } from "lucide-react";
 
 
@@ -74,6 +75,12 @@ const navigation = [
     id: "custom-charts",
     label: "Custom Analytics",
     icon: Sparkles,
+  },
+
+  {
+    id: "download-centre",
+    label: "Download Centre",
+    icon: FileSpreadsheet,
   },
 
 ];

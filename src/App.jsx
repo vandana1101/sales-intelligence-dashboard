@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DownloadCentre from "./components/DownloadCentre";
 
 import SettingsPage from "./pages/Settings";
 import UploadCenter from "./components/UploadCenter";
@@ -444,172 +445,43 @@ function App() {
   }
 
   /* =========================================================
-     PAGE RENDERER
+     KEEP DASHBOARD PAGES MOUNTED
+     This preserves each page's local filters while navigating.
   ========================================================= */
 
-  function renderPage() {
-
-    if (!data) {
-
-      return null;
-
-    }
-
-
-    switch (
-      activePage
-    ) {
-
-      case "overview":
-
-        return (
-
-          <Overview
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "opportunities":
-
-        return (
-
-          <Opportunities
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "won-analysis":
-
-        return (
-
-          <WonAnalysis
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-      case "loss-analysis":
-        return (
-          <LossAnalysis data={data} settings={settings} />
-        );
-
-      case "leads":
-
-        return (
-
-          <Leads
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "activities":
-
-        return (
-
-          <Activities
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "insights":
-
-        return (
-
-          <Insights
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "comparison":
-
-        return (
-
-          <MonthComparison
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "forecast":
-
-        return (
-
-          <Forecast
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "custom-charts":
-
-        return (
-
-          <CustomCharts
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-
-      case "settings":
-
-        return (
-
-          <SettingsPage
-
-            data={data}
-
-            settings={settings}
-
-            setSettings={
-              updateSettings
-            }
-
-            resetSettings={
-              resetSettings
-            }
-
-          />
-
-        );
-
-
-      default:
-
-        return (
-
-          <Overview
-            data={data}
-            settings={settings}
-          />
-
-        );
-
-    }
-
+  function renderDashboardPages() {
+    if (!data) return null;
+    const pages = [
+      { id: "overview", label: "Overview", node: <Overview data={data} settings={settings} /> },
+      { id: "opportunities", label: "Opportunities", node: <Opportunities data={data} settings={settings} /> },
+      { id: "won-analysis", label: "Won Analysis", node: <WonAnalysis data={data} settings={settings} /> },
+      { id: "loss-analysis", label: "Loss Analysis", node: <LossAnalysis data={data} settings={settings} /> },
+      { id: "leads", label: "Leads", node: <Leads data={data} settings={settings} /> },
+      { id: "activities", label: "Activities", node: <Activities data={data} settings={settings} /> },
+      { id: "insights", label: "Insights", node: <Insights data={data} settings={settings} /> },
+      { id: "comparison", label: "Month Comparison", node: <MonthComparison data={data} settings={settings} /> },
+      { id: "forecast", label: "Forecast", node: <Forecast data={data} settings={settings} /> },
+      { id: "custom-charts", label: "Custom Analytics", node: <CustomCharts data={data} settings={settings} /> },
+      { id: "settings", label: "Settings", node: <SettingsPage data={data} settings={settings} setSettings={updateSettings} resetSettings={resetSettings} /> },
+    ];
+
+    return <>
+      {pages.map((page) => {
+        const active = activePage === page.id;
+        return <div
+          key={page.id}
+          data-download-page={page.id}
+          data-download-page-label={page.label}
+          data-download-page-active={active ? "true" : undefined}
+          aria-hidden={!active}
+          style={active
+            ? { display: "block", minHeight: "100vh" }
+            : { position: "absolute", left: "-100000px", top: 0, width: "calc(100vw - 76px)", minHeight: "100vh", opacity: 0.001, pointerEvents: "none", zIndex: -1 }
+          }
+        >{page.node}</div>;
+      })}
+    </>;
   }
-
 
   /* =========================================================
      UPLOAD SCREEN
@@ -755,9 +627,8 @@ function App() {
         "
       >
 
-        {
-          renderPage()
-        }
+        {renderDashboardPages()}
+        {activePage === "download-centre" && <DownloadCentre />}
 
       </main>
 
