@@ -1067,21 +1067,8 @@ function fixedChartDomain(data = [], keys = [], padding = 0.12) {
 /* =========================================================
    OB TARGET VS ACHIEVEMENT SECTION
 ========================================================= */
-const DEFAULT_OB_TARGETS = [
-  { vertical: "Auto", owner: "Rajesh", q1: 4.8, q2: 7.8, q3: null, q4: null },
-  { vertical: "Auto", owner: "Tapasmaya", q1: null, q2: 25.8, q3: null, q4: null },
-  { vertical: "Ecom", owner: "Sandeep", q1: 1.8, q2: null, q3: null, q4: null },
-  { vertical: "Ecom", owner: "BD-BLR", q1: null, q2: 6, q3: null, q4: null },
-  { vertical: "Ecom", owner: "Sujit kumar", q1: 6.03, q2: null, q3: 2.84, q4: 6.03 },
-  { vertical: "F&L", owner: "BD-MAA", q1: null, q2: 6, q3: null, q4: null },
-  { vertical: "F&L", owner: "Kapil", q1: 4.5, q2: null, q3: null, q4: null },
-  { vertical: "F&L", owner: "BD-NCR", q1: null, q2: null, q3: 2.4, q4: null },
-  { vertical: "FMCD", owner: "Pallavi", q1: null, q2: 6, q3: null, q4: null },
-  { vertical: "FMCD", owner: "Shashank", q1: 3.6, q2: 19.2, q3: 2.64, q4: 2.4 },
-  { vertical: "FMCG", owner: "BD-BLR", q1: null, q2: 6, q3: null, q4: null },
-  { vertical: "FMCG", owner: "Sunil Singh", q1: null, q2: 6.6, q3: 15, q4: null },
-  { vertical: "LSC", owner: "Aditya Pilkhane", q1: null, q2: null, q3: 12, q4: null },
-];
+// OB data starts empty. It is populated only after an OB Target workbook is uploaded.
+const EMPTY_OB_TARGET_STATE = { rows: [], fiscalYearStart: null, fileName: null };
 
 const OB_VERTICAL_ALIASES = {
   auto: ["automobiles", "automobile", "auto"],
@@ -1214,10 +1201,13 @@ function OBTargetUploadButton() {
 function OrderBookTargetSection({ opportunities, compactOnly = false, quarterFilter = [], ownerFilter = [], pcsVerticalFilter = [], onExportData }) {
   const [targetState, setTargetState] = useState(() => {
     try {
+      // Restore only a workbook previously uploaded by the user; never seed sample/default targets.
       const saved = localStorage.getItem("salesDashboardOBTargets");
-      return saved ? JSON.parse(saved) : { rows: DEFAULT_OB_TARGETS, fiscalYearStart: 2026, fileName: "OB Target 2026-27.xlsx" };
+      if (!saved) return EMPTY_OB_TARGET_STATE;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed?.rows) && parsed.rows.length ? parsed : EMPTY_OB_TARGET_STATE;
     } catch {
-      return { rows: DEFAULT_OB_TARGETS, fiscalYearStart: 2026, fileName: "OB Target 2026-27.xlsx" };
+      return EMPTY_OB_TARGET_STATE;
     }
   });
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
@@ -1352,13 +1342,24 @@ function OrderBookTargetSection({ opportunities, compactOnly = false, quarterFil
   };
 
   if (compactOnly) {
+    const hasUploadedTargets = targetState.rows.length > 0;
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
-        <KPI title="Total OB Target" value={formatOBCr(totals.target)} subtitle={quarterFilter.length ? "Selected fiscal quarter(s)" : "Full financial year"} icon={Target} iconClass="bg-indigo-50 text-indigo-600" />
-        <KPI title="Total Achieved" value={formatOBCr(totals.achieved)} subtitle="Filtered opportunities" icon={Trophy} iconClass="bg-emerald-50 text-emerald-600" />
-        <KPI title="Achievement %" value={`${totals.pct.toFixed(1)}%`} subtitle="Achieved / target" icon={TrendingUp} iconClass="bg-blue-50 text-blue-600" />
-        <KPI title="OB Balance" value={formatOBCr(totals.balance)} subtitle="Target less achieved" icon={IndianRupee} iconClass="bg-amber-50 text-amber-600" />
+        <KPI title="Total OB Target" value={hasUploadedTargets ? formatOBCr(totals.target) : "—"} subtitle={hasUploadedTargets ? (quarterFilter.length ? "Selected fiscal quarter(s)" : "Full financial year") : "Upload OB Target workbook"} icon={Target} iconClass="bg-indigo-50 text-indigo-600" />
+        <KPI title="Total Achieved" value={hasUploadedTargets ? formatOBCr(totals.achieved) : "—"} subtitle={hasUploadedTargets ? "Filtered opportunities" : "Awaiting target workbook"} icon={Trophy} iconClass="bg-emerald-50 text-emerald-600" />
+        <KPI title="Achievement %" value={hasUploadedTargets && totals.target > 0 ? `${totals.pct.toFixed(1)}%` : "—"} subtitle={hasUploadedTargets ? "Achieved / target" : "Awaiting target workbook"} icon={TrendingUp} iconClass="bg-blue-50 text-blue-600" />
+        <KPI title="OB Balance" value={hasUploadedTargets ? formatOBCr(totals.balance) : "—"} subtitle={hasUploadedTargets ? "Target less achieved" : "Awaiting target workbook"} icon={IndianRupee} iconClass="bg-amber-50 text-amber-600" />
       </div>
+    );
+  }
+
+  if (!targetState.rows.length) {
+    return (
+      <section className="mb-8 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+        <Target className="mx-auto mb-3 text-slate-400" size={30} />
+        <h3 className="text-base font-semibold text-slate-700">OB analysis not loaded yet</h3>
+        <p className="mt-1 text-sm text-slate-500">Upload an OB Target workbook using the button at the top of the page to view the KPIs, charts and detailed table.</p>
+      </section>
     );
   }
 
