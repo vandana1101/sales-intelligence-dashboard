@@ -119,16 +119,6 @@ export default function DownloadCentre() {
       workbook.creator = "Sales Intelligence Dashboard";
       workbook.created = new Date();
       const used = new Set();
-      chosenTables.forEach((section) => {
-        const rows = section.rows.map((row) => ({ ...row }));
-        const sheet = workbook.addWorksheet(safeSheetName(`${section.pageLabel} - ${section.label}`, used));
-        const columns = section.columns?.length ? section.columns.map((column) => ({ header: String(column), key: String(column) })) : Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).map((key) => ({ header: key, key }));
-        sheet.columns = columns.map((column) => ({ ...column, width: Math.min(40, Math.max(14, String(column.header || column.key).length + 3)) }));
-        sheet.addRows(rows); sheet.views = [{ state: "frozen", ySplit: 1 }];
-        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3730A3" } };
-        if (columns.length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
-      });
       if (chosenCharts.length) {
         const sheet = workbook.addWorksheet(safeSheetName("Charts", used));
         sheet.getColumn(1).width = 34;
@@ -142,6 +132,16 @@ export default function DownloadCentre() {
           row += 24;
         }
       }
+      chosenTables.forEach((section) => {
+        const rows = section.rows.map((row) => ({ ...row }));
+        const sheet = workbook.addWorksheet(safeSheetName(`${section.pageLabel} - ${section.label}`, used));
+        const columns = section.columns?.length ? section.columns.map((column) => ({ header: String(column), key: String(column) })) : Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).map((key) => ({ header: key, key }));
+        sheet.columns = columns.map((column) => ({ ...column, width: Math.min(40, Math.max(14, String(column.header || column.key).length + 3)) }));
+        sheet.addRows(rows); sheet.views = [{ state: "frozen", ySplit: 1 }];
+        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3730A3" } };
+        if (columns.length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+      });
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
